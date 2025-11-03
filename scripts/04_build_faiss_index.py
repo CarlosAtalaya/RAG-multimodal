@@ -15,6 +15,10 @@ def build_faiss_index(
     """
     Construye índice FAISS para búsqueda de similitud
     
+    Soporta ambos tipos de metadata:
+    - Individual (crops_metadata.json)
+    - Clustering (clustered_crops_metadata.json)
+    
     Args:
         embeddings_path: Ruta a embeddings.npy
         metadata_path: Ruta a metadata JSON
@@ -38,6 +42,11 @@ def build_faiss_index(
     with open(metadata_path) as f:
         metadata = json.load(f)
     print(f"   - Entries: {len(metadata)}")
+    
+    # Detectar tipo de metadata
+    is_clustering = 'dominant_type' in metadata[0]
+    metadata_type = "CLUSTERING" if is_clustering else "INDIVIDUAL"
+    print(f"   - Tipo: {metadata_type}")
     
     # Verificar consistencia
     assert len(metadata) == n_vectors, \
@@ -90,19 +99,30 @@ def build_faiss_index(
     # 6. Guardar índice y metadata
     output_dir.mkdir(parents=True, exist_ok=True)
     
+    # Nombres de archivo según tipo
+    if is_clustering:
+        index_filename = f"{index_type.lower()}_clustered.index"
+        metadata_filename = "metadata_clustered.pkl"
+        config_filename = "index_config_clustered.json"
+    else:
+        index_filename = f"{index_type.lower()}.index"
+        metadata_filename = "metadata.pkl"
+        config_filename = "index_config.json"
+    
     # Guardar índice FAISS
-    index_path = output_dir / f"{index_type.lower()}.index"
+    index_path = output_dir / index_filename
     faiss.write_index(index, str(index_path))
     print(f"\n💾 Índice guardado: {index_path}")
     
     # Guardar metadata asociada (pickle para preservar tipos)
-    metadata_pkl_path = output_dir / "metadata.pkl"
+    metadata_pkl_path = output_dir / metadata_filename
     with open(metadata_pkl_path, 'wb') as f:
         pickle.dump(metadata, f)
     print(f"📦 Metadata (pickle): {metadata_pkl_path}")
     
     # Guardar configuración del índice
     config = {
+        "metadata_type": metadata_type,
         "index_type": index_type,
         "n_vectors": int(n_vectors),
         "embedding_dim": int(dim),
@@ -117,7 +137,7 @@ def build_faiss_index(
             "efSearch": 64
         })
     
-    config_path = output_dir / "index_config.json"
+    config_path = output_dir / config_filename
     with open(config_path, 'w') as f:
         json.dump(config, f, indent=2)
     print(f"⚙️  Config: {config_path}")
@@ -127,9 +147,10 @@ def build_faiss_index(
     print(f"✅ ÍNDICE FAISS CONSTRUIDO EXITOSAMENTE")
     print(f"{'='*70}")
     print(f"📊 Estadísticas:")
+    print(f"   - Tipo metadata: {metadata_type}")
     print(f"   - Vectores indexados: {index.ntotal}")
     print(f"   - Dimensión: {dim}")
-    print(f"   - Tipo: {index_type}")
+    print(f"   - Tipo índice: {index_type}")
     
     # Tamaño del índice en disco
     index_size_mb = index_path.stat().st_size / (1024 * 1024)
@@ -138,18 +159,62 @@ def build_faiss_index(
     
     return index, metadata
 
+
 if __name__ == "__main__":
-    # Rutas para mini-POC
-    EMBEDDINGS_PATH = Path("data/processed/embeddings/embeddings_mini_100.npy")
-    METADATA_PATH = Path("data/processed/embeddings/enriched_crops_metadata_mini_100.json")
-    OUTPUT_DIR = Path("outputs/vector_indices")
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Construir índice FAISS')
+    parser.add_argument(
+        '--embeddings',
+        type=Path,
+        default=Path("data/processed/embeddings/embeddings_clustered.npy"),
+        help='Ruta a embeddings'
+    )
+    parser.add_argument(
+        '--metadata',
+        type=Path,
+        default=Path("data/processed/embeddings/enriched_crops_metadata_clustered.json"),
+        help='Ruta a metadata enriquecida'
+    )
+    parser.add_argument(
+        '--output',
+        type=Path,
+        default=Path("outputs/vector_indices"),
+        help='Directorio de salida'
+    )
+    parser.add_argument(
+        '--index-type',
+        type=str,
+        default="IndexHNSWFlat",
+        choices=["IndexHNSWFlat", "IndexFlatL2"],
+        help='Tipo de índice FAISS'
+    )
+    
+    args = parser.parse_args()
+    
+    # Verificar que existen los archivos
+    if not args.embeddings.exists():
+        print(f"❌ Error: No se encontró {args.embeddings}")
+        print("\n💡 Opciones disponibles:")
+        print("   - Individual: data/processed/embeddings/embeddings.npy")
+        print("   - Clustering: data/processed/embeddings/embeddings_clustered.npy")
+        import sys
+        sys.exit(1)
+    
+    if not args.metadata.exists():
+        print(f"❌ Error: No se encontró {args.metadata}")
+        print("\n💡 Opciones disponibles:")
+        print("   - Individual: data/processed/embeddings/enriched_crops_metadata.json")
+        print("   - Clustering: data/processed/embeddings/enriched_crops_metadata_clustered.json")
+        import sys
+        sys.exit(1)
     
     # Construir índice
     index, metadata = build_faiss_index(
-        embeddings_path=EMBEDDINGS_PATH,
-        metadata_path=METADATA_PATH,
-        output_dir=OUTPUT_DIR,
-        index_type="IndexHNSWFlat"  # Óptimo para POC
+        embeddings_path=args.embeddings,
+        metadata_path=args.metadata,
+        output_dir=args.output,
+        index_type=args.index_type
     )
     
     print("✨ Fase 4 completada!\n")

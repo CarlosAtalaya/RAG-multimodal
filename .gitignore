@@ -6,14 +6,13 @@
 
 # Dataset POC (100 imágenes + JSONs)
 data/raw/100_samples/
-data/raw/jsons_segmentacion_jsonsfinales/
 
-# Crops generados (2,143 imágenes)
-data/processed/crops/roi/
-data/processed/crops/global/
+data/processed/crops/
 
 # Embeddings (archivos .npy grandes)
 data/processed/embeddings/*.npy
+
+docs/notes/
 
 # Índices FAISS
 outputs/vector_indices/*.index
