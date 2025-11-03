@@ -5,7 +5,7 @@
 # ==========================================
 
 # Dataset POC (100 imágenes + JSONs)
-data/raw/100_samples/
+data/raw/
 
 data/processed/crops/
 

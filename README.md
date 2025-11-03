@@ -44,7 +44,7 @@ python scripts/01_prepare_dataset.py
 
 ### 3. Generar Crops con Padding Adaptativo
 ```bash
-python scripts/02_generate_crops.py
+python scripts/02_generate_clustered_crops.py
 ```
 
 ### 4. Generar Embeddings

@@ -12,8 +12,7 @@ from src.core.preprocessing.clustered_crop_generator import ClusteredDefectCropG
 
 def process_dataset_with_clustering(
     dataset_dir: Path,
-    output_dir: Path,
-    comparison: bool = True
+    output_dir: Path
 ):
     """
     Procesa el dataset usando estrategia de clustering
@@ -21,7 +20,6 @@ def process_dataset_with_clustering(
     Args:
         dataset_dir: Directorio con dataset POC
         output_dir: Directorio de salida
-        comparison: Si True, compara con estrategia individual
     """
     
     generator = ClusteredDefectCropGenerator()
@@ -31,7 +29,7 @@ def process_dataset_with_clustering(
     crops_dir.mkdir(parents=True, exist_ok=True)
     
     # Cargar manifest
-    manifest_path = dataset_dir / "poc_manifest.json"
+    manifest_path = dataset_dir / "manifest.json"
     with open(manifest_path) as f:
         manifest = json.load(f)
     
@@ -102,33 +100,6 @@ def process_dataset_with_clustering(
     print(f"   - Crops: {crops_dir}")
     print(f"   - Metadata: {metadata_path}\n")
     
-    # Comparación con estrategia individual
-    if comparison:
-        individual_metadata_path = output_dir / "metadata" / "crops_metadata.json"
-        
-        if individual_metadata_path.exists():
-            with open(individual_metadata_path) as f:
-                individual_metadata = json.load(f)
-            
-            print(f"{'='*70}")
-            print(f"📊 COMPARACIÓN CON ESTRATEGIA INDIVIDUAL")
-            print(f"{'='*70}\n")
-            
-            individual_crops = len(individual_metadata)
-            clustered_crops = len(all_crops_metadata)
-            
-            print(f"Estrategia Individual:")
-            print(f"   - Crops generados: {individual_crops}")
-            print(f"   - Tiempo estimado embeddings: ~{individual_crops * 7 / 3600:.1f} horas\n")
-            
-            print(f"Estrategia Clustering:")
-            print(f"   - Crops generados: {clustered_crops}")
-            print(f"   - Tiempo estimado embeddings: ~{clustered_crops * 7 / 3600:.1f} horas\n")
-            
-            print(f"🎯 Mejora:")
-            print(f"   - Reducción crops: {(1 - clustered_crops/individual_crops)*100:.1f}%")
-            print(f"   - Ahorro tiempo: ~{(individual_crops - clustered_crops) * 7 / 3600:.1f} horas")
-    
     print(f"\n{'='*70}\n")
     
     return all_crops_metadata
@@ -170,14 +141,13 @@ def analyze_cluster_distribution(metadata: List[Dict]):
 
 
 if __name__ == "__main__":
-    DATASET_DIR = Path("data/raw/100_samples")
-    OUTPUT_DIR = Path("data/processed")
+    DATASET_DIR = Path("data/raw/stratified_subsets/high_density/")
+    OUTPUT_DIR = Path("data/processed/crops/high_density_20samples/")
     
     # Generar crops con clustering
     metadata = process_dataset_with_clustering(
         dataset_dir=DATASET_DIR,
-        output_dir=OUTPUT_DIR,
-        comparison=True
+        output_dir=OUTPUT_DIR
     )
     
     # Análisis detallado
