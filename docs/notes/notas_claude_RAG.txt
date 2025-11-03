@@ -1,0 +1,989 @@
+
+Hola, quiero generar un sistema RAG multimodal para una aplicacion basada en VLM (en mi caso estoy usando un modelo muy actual, el QWEN3-VL).
+
+Tengo algunos scripts de ejemplos para una estrategia que tengo propuesta, que te los voy a compartir.
+
+Antes de nada quiero pasarte cómo sería la arquitectura diseñada para hacer posible el flujo de trabajo completo, ya que actualmente ya dispongo de unos ficheros json referenciados a cada imagen de un conjunto de datos del que dispongo.
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        SISTEMA RAG COMPLETO                              │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌────────────────────┐          ┌────────────────────┐                │
+│  │   DATASET LABELED  │          │   NUEVA CONSULTA   │                │
+│  │   (Imágenes +      │          │   (Foto vehículo + │                │
+│  │   Anotaciones)     │          │   "¿Tiene rayones  │                │
+│  └─────────┬──────────┘          │    en capó?")      │                │
+│            │                     └─────────┬──────────┘                │
+│            │                               │                            │
+│            ▼                               ▼                            │
+│  ┌─────────────────────┐        ┌──────────────────────┐              │
+│  │ INDEXACIÓN OFFLINE  │        │ ANÁLISIS ONLINE       │              │
+│  │ (Una sola vez)      │        │ (Cada consulta)       │              │
+│  └─────────────────────┘        └──────────────────────┘              │
+│            │                               │                            │
+│            │                               │                            │
+│  ┌─────────▼──────────────────────────────▼──────────┐                │
+│  │                                                     │                │
+│  │            MÓDULOS DEL SISTEMA RAG                 │                │
+│  │                                                     │                │
+│  │  1️⃣ embeddings.py      ← Genera vectores         │                │
+│  │  2️⃣ vector_store.py    ← Almacena y busca        │                │
+│  │  3️⃣ rag_retriever.py   ← Recupera ejemplos       │                │
+│  │  4️⃣ analyzer.py (mod)  ← Usa RAG en análisis     │                │
+│  │  5️⃣ dataset_indexer.py ← Script de indexación    │                │
+│  │                                                     │                │
+│  └─────────────────────────────────────────────────────┘                │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+
+---
+## 🗂️ **NUEVA ESTRUCTURA DE ARCHIVOS**
+
+RAG_1stversion_qwen3vlm/
+│
+└── 📁 Módulos Nuevos RAG (AÑADIR)
+    ├── embeddings.py        ← 🆕 Generador de embeddings visuales
+    ├── vector_store.py      ← 🆕 Base de datos vectorial (FAISS)
+    ├── rag_retriever.py     ← 🆕 Motor de recuperación RAG
+    └── dataset_indexer.py   ← 🆕 Script de indexación del dataset
+📁 Nuevos Directorios de Datos
+├── data/
+│   ├── labeled_dataset/     ← Tus imágenes etiquetadas, contiene un .jpg y un .json por cada imagen
+│
+└── outputs/
+    └── vector_index/        ← Índice FAISS generado
+        ├── faiss.index      ← Índice de búsqueda vectorial
+        └── metadata.json    ← Metadatos de cada imagen
+
+Los scrits de ejemplos que tengo solamente con descripciones son los siguientes:
+
+embeddings.py:
+"""
+┌─────────────────────────────────────────────────────────────────┐
+│  FUNCIÓN: Convertir imágenes en vectores numéricos             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  INPUT:  Imagen de vehículo (JPG/PNG)                          │
+│           ↓                                                      │
+│  PROCESO: Usa Qwen3-VL para extraer características visuales   │
+│           ↓                                                      │
+│  OUTPUT: Vector de 768 dimensiones (embedding)                 │
+│                                                                  │
+│  EJEMPLO:                                                        │
+│  - Rayón en capó     → [0.23, -0.45, 0.67, ..., 0.12]         │
+│  - Rayón en capó     → [0.21, -0.43, 0.69, ..., 0.10] ← Similar│
+│  - Abolladura puerta → [-0.56, 0.78, -0.23, ..., 0.89] ← Diferente│
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+"""
+class VehicleEmbeddingGenerator:
+
+  def generate_embedding(self, image_path: str) -> np.ndarray:
+      """
+      Convierte imagen → vector numérico
+
+      Uso:
+      ----
+      generator = VehicleEmbeddingGenerator()
+      vector = generator.generate_embedding("coche_dañado.jpg")
+      # vector.shape = (768,)
+      """
+
+vector_store.py:
+"""
+┌─────────────────────────────────────────────────────────────────┐
+│  FUNCIÓN: Almacenar y buscar embeddings rápidamente            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  TECNOLOGÍA: FAISS (Facebook AI Similarity Search)             │
+│                                                                  │
+│  CAPACIDADES:                                                    │
+│  ✅ Almacenar millones de vectores                             │
+│  ✅ Buscar top-K similares en milisegundos                     │
+│  ✅ Filtrar por tipo de daño (rayón, abolladura, etc.)        │
+│                                                                  │
+│  ESTRUCTURA INTERNA:                                            │
+│  ┌────────────────────────────────────────────────────────┐   │
+│  │ FAISS Index                                            │   │
+│  │ ├─ Vector 0: [0.23, -0.45, ...] → Metadata ID: 0      │   │
+│  │ ├─ Vector 1: [0.21, -0.43, ...] → Metadata ID: 1      │   │
+│  │ └─ Vector N: [-0.56, 0.78, ...] → Metadata ID: N      │   │
+│  └────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────┐   │
+│  │ Metadata Storage (JSON)                                │   │
+│  │ ID 0: {image: "scratch_1.jpg", type: "scratch", ...}  │   │
+│  │ ID 1: {image: "scratch_2.jpg", type: "scratch", ...}  │   │
+│  │ ID N: {image: "dent_5.jpg", type: "dent", ...}        │   │
+│  └────────────────────────────────────────────────────────┘   │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+"""
+class VehicleDamageVectorStore:
+
+  def add_images(self, embeddings, metadata):
+      """Añade imágenes al índice (OFFLINE)"""
+
+  def search(self, query_embedding, k=5, damage_type_filter=None):
+      """
+      Busca imágenes similares (ONLINE)
+
+      Uso:
+      ----
+      query_vector = generator.generate_embedding("nueva_consulta.jpg")
+      similares = vector_store.search(query_vector, k=3, damage_type_filter="scratch")
+
+      Resultado:
+      ----------
+      [
+          {'image_path': 'scratch_capó_1.jpg', 'similarity': 0.95, 'type': 'scratch'},
+          {'image_path': 'scratch_capó_2.jpg', 'similarity': 0.89, 'type': 'scratch'},
+          {'image_path': 'scratch_puerta_3.jpg', 'similarity': 0.84, 'type': 'scratch'}
+      ]
+      """
+
+rag_retriever.py:
+"""
+┌─────────────────────────────────────────────────────────────────┐
+│  FUNCIÓN: Orquestador del sistema RAG completo                  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  FLUJO DE TRABAJO:                                              │
+│                                                                  │
+│  1. Recibe imagen de consulta                                   │
+│  2. Genera embedding de la imagen                               │
+│  3. Busca en vector_store las top-K similares                   │
+│  4. Filtra por tipo de daño (si se especificó)                  │
+│  5. Construye contexto para el prompt del VLM                   │
+│                                                                  │
+│  EJEMPLO DE CONTEXTO GENERADO:                                  │
+│  ┌────────────────────────────────────────────────────────┐   │
+│  │ **EJEMPLOS DE REFERENCIA DE DAÑOS SIMILARES:**        │   │
+│  │                                                         │   │
+│  │ Ejemplo 1 (similitud: 95%):                            │   │
+│  │ - Tipo: Rayón                                          │   │
+│  │ - Ubicación: Capó frontal                              │   │
+│  │ - Severidad: Menor                                     │   │
+│  │ - Descripción: Rayón lineal de 8cm, superficial       │   │
+│  │                                                         │   │
+│  │ Ejemplo 2 (similitud: 89%):                            │   │
+│  │ - Tipo: Rayón                                          │   │
+│  │ - Ubicación: Capó lateral derecho                      │   │
+│  │ - Severidad: Menor                                     │   │
+│  │ - Descripción: Múltiples rayones paralelos            │   │
+│  │                                                         │   │
+│  │ **Usa estos ejemplos como referencia para tu          │   │
+│  │ análisis, pero enfócate en la imagen actual.**        │   │
+│  └────────────────────────────────────────────────────────┘   │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+"""
+class DamageRAGRetriever:
+
+    def retrieve_similar_damages(self, query_image_path, damage_type=None, k=3):
+        """
+        Recupera ejemplos similares del dataset
+
+        Uso:
+        ----
+        retriever = DamageRAGRetriever(vector_store, embedding_gen)
+        ejemplos = retriever.retrieve_similar_damages(
+            "coche_nuevo.jpg",
+            damage_type="scratch",
+            k=3
+        )
+        """
+
+    def build_rag_context(self, similar_examples):
+        """
+        Construye el texto de contexto para el prompt
+
+        Este texto se añade al prompt que se envía a Qwen3-VL
+        """
+
+dataset_indexer.py:
+┌─────────────────────────────────────────────────────────────────┐ │ FUNCIÓN: Script de ejecución ÚNICA para indexar dataset │ ├─────────────────────────────────────────────────────────────────┤ │ │ │ CUÁNDO EJECUTAR: Una sola vez al inicio (o al actualizar dataset)│ │ │ │ PROCESO: │ │ ┌────────────────────────────────────────────────────────┐ │ │ │ 1. Lee annotations.json │ │ │ │ { │ │ │ │ "image_path": "scratch_1.jpg", │ │ │ │ "damage_type": "scratch", │ │ │ │ "location": "hood", │ │ │ │ "severity": "minor" │ │ │ │ } │ │ │ │ │ │ │ │ 2. Para cada imagen: │ │ │ │ - Genera embedding visual │ │ │ │ - Añade al vector store │ │ │ │ │ │ │ │ 3. Guarda índice FAISS en disco │ │ │ │ │ │ │ │ 4. Guarda metadata.json │ │ │ └────────────────────────────────────────────────────────┘ │ │ │ │ TIEMPO DE EJECUCIÓN: │ │ - 1,000 imágenes: ~10-30 minutos (GPU) │ │ - 10,000 imágenes: ~1-3 horas (GPU) │ │ │ └─────────────────────────────────────────────────────────────────┘ """ def index_dataset(dataset_path, annotations_file): """ Indexa el dataset completo Uso: ---- python dataset_indexer.py # O desde código: index_dataset( dataset_path="data/labeled_dataset", annotations_file="data/annotations.json" ) Salida: ------- outputs/vector_index/ ├── faiss.index ← 50-200MB (dependiendo del dataset) └── metadata.json ← 1-10MB """
+
+Más adelante te pasaré un ls de la carpeta sobre la que quiero generar el RAG para que el modelo tenga un mejor contexto, y mi proyecto que he estado usando para hacer una analisis sin embedding previo.
+
+has entendido todo más o menos?
+Te puedo pasar un pequeño resuemn ejecutivo:
+
+Flujo interno: ───────────── ┌─ rag_retriever.py ──────────────────────┐ │ 1. Parsea consulta │ │ "rayones" → damage_type="scratch" │ │ │ │ 2. Genera embedding de imagen consulta │ │ embeddings.py → vector[768] │ │ │ │ 3. Busca en vector_store │ │ vector_store.search( │ │ query=vector, │ │ k=3, │ │ filter="scratch" │ │ ) │ │ │ │ 4. Retorna top-3 ejemplos similares │ └──────────────────────────────────────────┘ ↓ ┌─ rag_retriever.py ──────────────────────┐ │ 5. Construye contexto RAG │ │ │ │ **EJEMPLOS DE REFERENCIA:** │ │ Ejemplo 1 (95% similar): │ │ - Rayón lineal en capó, 5cm │ │ - Severidad: Menor │ │ │ │ Ejemplo 2 (89% similar): │ │ - Múltiples rayones paralelos │ │ - Severidad: Moderada │ │ │ │ Ejemplo 3 (84% similar): │ │ - Rayón diagonal en capó lateral │ │ - Severidad: Menor │ └──────────────────────────────────────────┘ ↓ ┌─ analyzer.py ───────────────────────────┐ │ 6. Análisis de imagen con contexto │ │ │ │ Prompt a Qwen3-VL: │ │ ┌────────────────────────────────────┐ │ │ │ [CONTEXTO RAG aquí] │ │ │ │ │ │ │ │ Analiza esta imagen y determina: │ │ │ │ ¿Tiene rayones en el capó? │ │ │ │ │ │ │ │ Usa los ejemplos de referencia │ │ │ │ para calibrar tu análisis. │ │ │ └────────────────────────────────────┘ │ │ │ │ → Qwen3-VL procesa con mejor contexto │ └──────────────────────────────────────────┘ ↓ ┌─ analyzer.py ───────────────────────────┐ │ 7. Resultado final │ │ │ │ { │ │ "damage_detected": true, │ │ "damage_type": "scratch", │ │ "location": "hood", │ │ "confidence": 0.94, │ │ "similar_examples_used": 3, │ │ "analysis": "Rayón lineal detectado... │ │ similar a ejemplo 1..." │ │ } │ └──────────────────────────────────────────┘
+
+
+
+
+
+
+
+Te he pasado texto plano de una tarea a la que quiero que me ayudes. Es para diseñar una arquitectura de RAG multimodal de un sistema de deteccion de desperfectos basados en RAG_1stversion_qwen3vl.
+Hasta ahora he podido generar una api contenerizada con qwen3vl con el modelo de 4B Instruct. Más adelante te pasaré el proyecto para que tengas el contexto  de como tienen que ser los endpoints, los prompts y los payloads para que le modelo montad sobre la api dé resuestas.
+
+El dataset que dispongo tiene la siguiente estructura:
+ls jsons_segmentacion_jsonsfinales/
+zona1_ko_2_3_1554114337244_zona_5_imageDANO_original.jpg
+zona1_ko_2_3_1554114337244_zona_5_labelDANO_modificado.json
+zona1_ko_2_3_1554114479790_zona_3_imageDANO_original.jpg
+zona1_ko_2_3_1554114479790_zona_3_labelDANO_modificado.json
+zona1_ko_2_3_1554114578903_zona_5_imageDANO_original.jpg
+zona1_ko_2_3_1554114578903_zona_5_labelDANO_modificado.json
+.....
+
+El tipo de estructura que tienen estos json:
+
+{
+    "dudosa": false,
+    "editada": true,
+    "flags": {},
+    "imageData": null,
+    "imageHeight": 3000,
+    "imagePath": "zona1_ko_2_3_1554114337244_zona_5_imageDANO_original.jpg",
+    "imageWidth": 4000,
+    "incorrecta": false,
+    "root": "Minsait_Old_Dataset/Minsait_Dataset_Images/Minsait_Dataset_Images_Zonas/5/zona1_ko_2_3_1554114337244_zona_5_imageDANO_original.jpg",
+    "shapes": [
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "1",
+            "piece": 2,
+            "pixelated_type": 2,
+            "points": [
+                [
+                    1660,
+                    1913
+                ],
+                [
+                    1646,
+                    1876
+                ],
+                [
+                    1663,
+                    1860
+                ],
+                [
+                    1676,
+                    1890
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "1",
+            "piece": 2,
+            "pixelated_type": 2,
+            "points": [
+                [
+                    1526,
+                    1673
+                ],
+                [
+                    1550,
+                    1666
+                ],
+                [
+                    1560,
+                    1656
+                ],
+                [
+                    1589,
+                    1666
+                ],
+                [
+                    1590,
+                    1680
+                ],
+                [
+                    1573,
+                    1690
+                ],
+                [
+                    1526,
+                    1682
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "1",
+            "piece": 2,
+            "pixelated_type": 2,
+            "points": [
+                [
+                    1610,
+                    1703
+                ],
+                [
+                    1610,
+                    1730
+                ],
+                [
+                    1616,
+                    1763
+                ],
+                [
+                    1620,
+                    1806
+                ],
+                [
+                    1624,
+                    1840
+                ],
+                [
+                    1632,
+                    1842
+                ],
+                [
+                    1636,
+                    1843
+                ],
+                [
+                    1626,
+                    1756
+                ],
+                [
+                    1626,
+                    1700
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "1",
+            "piece": 2,
+            "pixelated_type": 2,
+            "points": [
+                [
+                    2753,
+                    1900
+                ],
+                [
+                    2763,
+                    1936
+                ],
+                [
+                    2773,
+                    1943
+                ],
+                [
+                    2783,
+                    1890
+                ],
+                [
+                    2770,
+                    1876
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "1",
+            "piece": 2,
+            "pixelated_type": 2,
+            "points": [
+                [
+                    1870,
+                    1693
+                ],
+                [
+                    1870,
+                    1676
+                ],
+                [
+                    1886,
+                    1680
+                ],
+                [
+                    1893,
+                    1690
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "1",
+            "piece": 2,
+            "pixelated_type": 2,
+            "points": [
+                [
+                    1756,
+                    1683
+                ],
+                [
+                    1760,
+                    1673
+                ],
+                [
+                    1776,
+                    1673
+                ],
+                [
+                    1782,
+                    1688
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "1",
+            "piece": 2,
+            "pixelated_type": 2,
+            "points": [
+                [
+                    3242,
+                    1626
+                ],
+                [
+                    3183,
+                    1623
+                ],
+                [
+                    3142,
+                    1609
+                ],
+                [
+                    3123,
+                    1583
+                ],
+                [
+                    3139,
+                    1579
+                ],
+                [
+                    3170,
+                    1596
+                ],
+                [
+                    3196,
+                    1591
+                ],
+                [
+                    3220,
+                    1586
+                ],
+                [
+                    3239,
+                    1593
+                ],
+                [
+                    3246,
+                    1616
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "1",
+            "piece": 2,
+            "pixelated_type": 2,
+            "points": [
+                [
+                    1383,
+                    2163
+                ],
+                [
+                    1387,
+                    2187
+                ],
+                [
+                    1414,
+                    2195
+                ],
+                [
+                    1416,
+                    2173
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "1",
+            "piece": 2,
+            "pixelated_type": 2,
+            "points": [
+                [
+                    1840,
+                    1976
+                ],
+                [
+                    1837,
+                    1992
+                ],
+                [
+                    1863,
+                    1990
+                ],
+                [
+                    1870,
+                    1980
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "1",
+            "points": [
+                [
+                    3586,
+                    1818
+                ],
+                [
+                    3569,
+                    1842
+                ],
+                [
+                    3590,
+                    1851
+                ],
+                [
+                    3598,
+                    1823
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "1",
+            "points": [
+                [
+                    1923,
+                    1973
+                ],
+                [
+                    1926,
+                    1991
+                ],
+                [
+                    1942,
+                    1994
+                ],
+                [
+                    1943,
+                    1975
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "1",
+            "points": [
+                [
+                    1980,
+                    1974
+                ],
+                [
+                    1981,
+                    1992
+                ],
+                [
+                    2092,
+                    2006
+                ],
+                [
+                    2093,
+                    1988
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "1",
+            "points": [
+                [
+                    1570,
+                    1757
+                ],
+                [
+                    1565,
+                    1769
+                ],
+                [
+                    1584,
+                    1773
+                ],
+                [
+                    1588,
+                    1756
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "2",
+            "points": [
+                [
+                    1739,
+                    1939
+                ],
+                [
+                    1736,
+                    1956
+                ],
+                [
+                    1750,
+                    1967
+                ],
+                [
+                    1766,
+                    1967
+                ],
+                [
+                    1768,
+                    1946
+                ],
+                [
+                    1747,
+                    1934
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "1",
+            "points": [
+                [
+                    959,
+                    2046
+                ],
+                [
+                    980,
+                    2070
+                ],
+                [
+                    993,
+                    2065
+                ],
+                [
+                    981,
+                    2044
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "1",
+            "points": [
+                [
+                    914,
+                    1816
+                ],
+                [
+                    908,
+                    1848
+                ],
+                [
+                    960,
+                    1878
+                ],
+                [
+                    1014,
+                    1890
+                ],
+                [
+                    1080,
+                    1888
+                ],
+                [
+                    1093,
+                    1845
+                ],
+                [
+                    1062,
+                    1822
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "1",
+            "points": [
+                [
+                    941,
+                    1920
+                ],
+                [
+                    944,
+                    1944
+                ],
+                [
+                    1056,
+                    1946
+                ],
+                [
+                    1066,
+                    1923
+                ],
+                [
+                    1050,
+                    1922
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "3",
+            "points": [
+                [
+                    931,
+                    1497
+                ],
+                [
+                    916,
+                    1555
+                ],
+                [
+                    981,
+                    1573
+                ],
+                [
+                    1040,
+                    1577
+                ],
+                [
+                    1109,
+                    1566
+                ],
+                [
+                    1200,
+                    1555
+                ],
+                [
+                    1259,
+                    1619
+                ],
+                [
+                    1429,
+                    1603
+                ],
+                [
+                    1530,
+                    1586
+                ],
+                [
+                    1632,
+                    1598
+                ],
+                [
+                    1786,
+                    1652
+                ],
+                [
+                    1873,
+                    1642
+                ],
+                [
+                    1898,
+                    1640
+                ],
+                [
+                    1944,
+                    1663
+                ],
+                [
+                    1982,
+                    1643
+                ],
+                [
+                    2015,
+                    1559
+                ],
+                [
+                    1976,
+                    1530
+                ],
+                [
+                    1918,
+                    1524
+                ],
+                [
+                    1876,
+                    1518
+                ],
+                [
+                    1669,
+                    1507
+                ],
+                [
+                    1538,
+                    1499
+                ],
+                [
+                    1392,
+                    1488
+                ],
+                [
+                    1164,
+                    1470
+                ],
+                [
+                    1046,
+                    1470
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "1",
+            "points": [
+                [
+                    1245,
+                    1412
+                ],
+                [
+                    1248,
+                    1430
+                ],
+                [
+                    1264,
+                    1429
+                ],
+                [
+                    1264,
+                    1415
+                ]
+            ],
+            "shape_type": "polygon"
+        },
+        {
+            "flags": {},
+            "group_id": null,
+            "label": "3",
+            "points": [
+                [
+                    1190,
+                    613
+                ],
+                [
+                    1180,
+                    648
+                ],
+                [
+                    1259,
+                    657
+                ],
+                [
+                    1315,
+                    651
+                ],
+                [
+                    1356,
+                    644
+                ],
+                [
+                    1470,
+                    643
+                ],
+                [
+                    1561,
+                    640
+                ],
+                [
+                    1662,
+                    630
+                ],
+                [
+                    1707,
+                    625
+                ],
+                [
+                    1770,
+                    634
+                ],
+                [
+                    1780,
+                    618
+                ],
+                [
+                    1969,
+                    621
+                ],
+                [
+                    2020,
+                    636
+                ],
+                [
+                    2048,
+                    615
+                ],
+                [
+                    2099,
+                    613
+                ],
+                [
+                    2139,
+                    584
+                ],
+                [
+                    1912,
+                    585
+                ],
+                [
+                    1559,
+                    589
+                ]
+            ],
+            "shape_type": "polygon"
+        }
+    ],
+    "version": "4.6.0"
+}
+
+
+
+Esa carpeta de dataset contiene 2711 imagenes con sus respectivos json, y pesa mas de 7GB.
+Dada la estructura de los jsons creo que es de información muy útil tener los poligonos con un tipo de etiqueta (label, en total hay 8 que te detallaré a continuación), y las coordenadas espaciales dentro de cada foto del defecto.
+
+Para este caso de uso hay estas 8 distinciones de etiquetas que me gustaría que le dieses forma o normalizases los nombres en ingles para que el contexto sea mejor:
+Label 1- Arañazo general 
+Label 2- Abolladura 
+Label 3- Pintura levantada 
+Label 4- Arañazo Grande
+Label 5- Grieta 
+Label 6- Falta trozo de coche
+Label 7- Falta algo generico del coche (tapón, marca, letras, etc…)
+Label 8- Pieza ligeramente salida o desviada
+
+Me gustaría que estos labels estén algo más normalizados, con un nombre o prompt especifico por cada label más claro
+
+Me gustaría diseñar algun flujo de trabajo para poder ir obteniendo toda esta información útil para poder ir construyendo un RAG multimodal (que de momento querría que fuese especíifco para este caso de uso pero más adelante querría que fuese escalable a cualquier dataset de cualquier ámbito, para que tengas esto claro para ir construyendo la arquitectura del sistema en cuanto a ficheros de configuración y otras cosas relevantes), tener en cuenta si se precisa qué estrategias serían buenas, si es necesario para construir este embedding pasar todas las imagenes en la alta calidad original que tioenen o podría ser bueno sólamente pasarle tiles de las imagenes o areas alrededor de donde sí hay defectos. En fin todo este tipo de estrategias quiero que em aydues a orientarlas para formalizar algo que estñe realmente fino.
+y poder ir construyendo como esa base de datos de la que te estoy hablando 
+
+De momento quiero que tengas todo este contexto del prompt para que lo sintetices correctamente, más adelante te pasaré como tiene que ser el payload a la API y el endpoint para que me ayudes a ir generando algun tipo de pruebas con un RAG primero sólamente con un conjunto de 100 imágenes sobre la aquitectura POC para ir haciendo rpuebas de los resultados al pasarle ese embedding al modelo de qwen3vl con la api que te he comentado anteriormente.

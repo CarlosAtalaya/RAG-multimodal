@@ -1,0 +1,84 @@
+# .gitignore
+
+# ==========================================
+# DATOS PESADOS (No subir a Git)
+# ==========================================
+
+# Dataset POC (100 imágenes + JSONs)
+data/raw/100_samples/
+data/raw/jsons_segmentacion_jsonsfinales/
+
+# Crops generados (2,143 imágenes)
+data/processed/crops/roi/
+data/processed/crops/global/
+
+# Embeddings (archivos .npy grandes)
+data/processed/embeddings/*.npy
+
+# Índices FAISS
+outputs/vector_indices/*.index
+outputs/vector_indices/*.pkl
+
+# ==========================================
+# PYTHON
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# ==========================================
+# IDEs
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ==========================================
+# OS
+# ==========================================
+.DS_Store
+Thumbs.db
+
+# ==========================================
+# Logs
+# ==========================================
+*.log
+logs/
+outputs/logs/
+
+# ==========================================
+# Temporales
+# ==========================================
+tmp/
+temp/
+*.tmp
+
+# ==========================================
+# Jupyter Notebooks
+# ==========================================
+.ipynb_checkpoints/

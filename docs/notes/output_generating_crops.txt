@@ -1,0 +1,31 @@
+✅ Generados 2143 crops
+⚠️  Descartados 12 crops por umbrales
+📊 Tasa de aprovechamiento: 99.4%
+📄 Metadata guardada en: data/processed/metadata/crops_metadata.json
+======================================================================
+
+📊 Distribución de crops por tipo de daño:
+  surface_scratch: 1911 crops
+  dent: 77 crops
+  crack: 30 crops
+  missing_part: 29 crops
+  missing_accessory: 29 crops
+  paint_peeling: 23 crops
+  misaligned_part: 22 crops
+  deep_scratch: 22 crops
+
+📍 Distribución espacial:
+  middle_center: 658 crops
+  bottom_center: 520 crops
+  middle_left: 312 crops
+  middle_right: 271 crops
+  bottom_right: 195 crops
+  bottom_left: 180 crops
+  top_center: 4 crops
+  top_right: 2 crops
+  top_left: 1 crops
+
+📏 Distribución por tamaño relativo:
+  medium: 22 crops
+  small: 103 crops
+  very_small: 2018 crops
