@@ -52,10 +52,11 @@ class DINOv3ViTLEmbedder:
         login(token=token)
         
         # Determinar dtype óptimo
-        if use_bfloat16 and self.device == "cuda":
-            self.dtype = torch.bfloat16
-        else:
-            self.dtype = torch.float32
+        # if use_bfloat16 and self.device == "cuda":
+        #     self.dtype = torch.bfloat16
+        # else:
+        #     self.dtype = torch.float32
+        self.dtype = torch.float32
         
         print(f"\n{'='*70}")
         print(f"🔧 INICIALIZANDO DINOv3-ViT-L/16")

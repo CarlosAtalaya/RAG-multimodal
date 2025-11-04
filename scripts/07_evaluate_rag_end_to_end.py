@@ -25,6 +25,7 @@ from typing import List, Dict, Tuple
 from dataclasses import dataclass, asdict
 import requests
 import numpy as np
+import gc, torch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -245,24 +246,59 @@ class EndToEndRAGEvaluator:
                     ]
                 }
             ],
-            "max_tokens": 500,
+            "max_tokens": 1024,
             "temperature": 0.1
         }
         
-        try:
-            response = requests.post(
-                self.qwen_endpoint,
-                json=payload,
-                timeout=60
-            )
-            
-            if response.status_code == 200:
-                return response.json()['choices'][0]['message']['content']
-            else:
-                return f"Error: API returned {response.status_code}"
-        
-        except Exception as e:
-            return f"Error: {str(e)}"
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(
+                    self.qwen_endpoint,
+                    json=payload,
+                    timeout=180
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    content = data['choices'][0]['message']['content']
+
+                    # 🧹 Limpieza explícita de memoria
+                    gc.collect()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+
+                    return content
+
+                elif response.status_code == 500:
+                    # Esperar un poco y reintentar
+                    print(f"⚠️ API 500 (intento {attempt+1}/{max_retries}) — posible OOM, reintentando...")
+                    gc.collect()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    time.sleep(5)
+
+                else:
+                    return f"Error: API returned {response.status_code}"
+
+            except requests.exceptions.RequestException as e:
+                print(f"⚠️ Error de conexión: {e} (intento {attempt+1}/{max_retries})")
+                time.sleep(5)
+
+            except Exception as e:
+                print(f"⚠️ Excepción inesperada: {e} (intento {attempt+1}/{max_retries})")
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                time.sleep(5)
+
+        # ==============================
+        # 4️⃣ Si falla todos los intentos
+        # ==============================
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        return "Error: API returned 500 (después de múltiples intentos)"
     
     def _calculate_recall(
         self,
