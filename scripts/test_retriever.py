@@ -2,6 +2,10 @@
 
 from pathlib import Path
 import numpy as np
+import sys
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from src.core.rag.retriever import DamageRAGRetriever
 
 def test_retriever():
@@ -13,13 +17,13 @@ def test_retriever():
     
     # Inicializar retriever
     retriever = DamageRAGRetriever(
-        index_path=Path("outputs/vector_indices/indexhnswflat.index"),
-        metadata_path=Path("outputs/vector_indices/metadata.pkl"),
-        config_path=Path("outputs/vector_indices/index_config.json")
+        index_path=Path("outputs/vector_indices/low_density/indexhnswflat_clustered.index"),
+        metadata_path=Path("outputs/vector_indices/low_density/metadata_clustered.pkl"),
+        config_path=Path("outputs/vector_indices/low_density/index_config_clustered.json")
     )
     
     # Cargar embeddings para test
-    embeddings = np.load("data/processed/embeddings/embeddings_mini_100.npy")
+    embeddings = np.load("data/processed/embeddings/low_density_20samples/embeddings_clustered.npy")
     
     # TEST 1: Búsqueda sin filtros
     print("\n" + "-"*70)

@@ -141,8 +141,8 @@ def analyze_cluster_distribution(metadata: List[Dict]):
 
 
 if __name__ == "__main__":
-    DATASET_DIR = Path("data/raw/stratified_subsets/high_density/")
-    OUTPUT_DIR = Path("data/processed/crops/high_density_20samples/")
+    DATASET_DIR = Path("data/raw/stratified_subsets/low_density/")
+    OUTPUT_DIR = Path("data/processed/crops/low_density_20samples/")
     
     # Generar crops con clustering
     metadata = process_dataset_with_clustering(

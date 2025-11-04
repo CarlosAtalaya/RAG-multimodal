@@ -67,14 +67,6 @@ class DamageRAGRetriever:
     ) -> List[SearchResult]:
         """
         Búsqueda de similitud en el índice
-        
-        Args:
-            query_embedding: Vector de query (1, dim) o (dim,)
-            k: Número de resultados a retornar
-            filters: Filtros opcionales (damage_type, spatial_zone, etc.)
-        
-        Returns:
-            Lista de SearchResult ordenados por similitud
         """
         # Asegurar shape correcto
         if query_embedding.ndim == 1:
@@ -83,7 +75,6 @@ class DamageRAGRetriever:
         query_embedding = query_embedding.astype('float32')
         
         # Búsqueda en FAISS
-        # Si hay filtros, buscar más resultados y filtrar después
         k_search = k * 5 if filters else k
         k_search = min(k_search, self.index.ntotal)
         
@@ -92,7 +83,7 @@ class DamageRAGRetriever:
         # Construir resultados
         results = []
         for dist, idx in zip(distances[0], indices[0]):
-            if idx == -1:  # FAISS retorna -1 si no hay suficientes resultados
+            if idx == -1:
                 continue
             
             meta = self.metadata[idx]
@@ -102,14 +93,15 @@ class DamageRAGRetriever:
                 if not self._apply_filters(meta, filters):
                     continue
             
+            # FIX: Usar .get() para campos que pueden variar
             result = SearchResult(
                 index=int(idx),
                 distance=float(dist),
-                crop_path=meta['crop_path'],
-                damage_type=meta['damage_type'],
-                image_path=meta['image_path'],
-                bbox=meta['bbox'],
-                spatial_zone=meta['spatial_zone'],
+                crop_path=meta.get('crop_path', ''),
+                damage_type=meta.get('dominant_type', meta.get('damage_type', 'unknown')),
+                image_path=meta.get('source_image', meta.get('image_path', '')),
+                bbox=meta.get('cluster_bbox', meta.get('bbox', [])),
+                spatial_zone=meta.get('spatial_zone', 'unknown'),
                 metadata=meta
             )
             
@@ -128,7 +120,10 @@ class DamageRAGRetriever:
             allowed_types = filters['damage_type']
             if isinstance(allowed_types, str):
                 allowed_types = [allowed_types]
-            if meta['damage_type'] not in allowed_types:
+            
+            # FIX: Buscar en dominant_type o damage_type
+            damage_type = meta.get('dominant_type', meta.get('damage_type', 'unknown'))
+            if damage_type not in allowed_types:
                 return False
         
         # Filtro por zona espacial
@@ -136,7 +131,7 @@ class DamageRAGRetriever:
             allowed_zones = filters['spatial_zone']
             if isinstance(allowed_zones, str):
                 allowed_zones = [allowed_zones]
-            if meta['spatial_zone'] not in allowed_zones:
+            if meta.get('spatial_zone', 'unknown') not in allowed_zones:
                 return False
         
         # Filtro por tamaño relativo
@@ -144,7 +139,7 @@ class DamageRAGRetriever:
             allowed_sizes = filters['size_category']
             if isinstance(allowed_sizes, str):
                 allowed_sizes = [allowed_sizes]
-            if meta['size_category'] not in allowed_sizes:
+            if meta.get('relative_size', meta.get('size_category', 'unknown')) not in allowed_sizes:
                 return False
         
         return True
