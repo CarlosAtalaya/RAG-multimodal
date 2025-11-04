@@ -29,7 +29,7 @@ def process_dataset_with_clustering(
     crops_dir.mkdir(parents=True, exist_ok=True)
     
     # Cargar manifest
-    manifest_path = dataset_dir / "manifest.json"
+    manifest_path = dataset_dir / "train_manifest.json"
     with open(manifest_path) as f:
         manifest = json.load(f)
     
@@ -141,8 +141,8 @@ def analyze_cluster_distribution(metadata: List[Dict]):
 
 
 if __name__ == "__main__":
-    DATASET_DIR = Path("data/raw/stratified_subsets/low_density/")
-    OUTPUT_DIR = Path("data/processed/crops/low_density_20samples/")
+    DATASET_DIR = Path("data/raw/train_test_split/train/")
+    OUTPUT_DIR = Path("data/processed/crops/train_815_originalimages/")
     
     # Generar crops con clustering
     metadata = process_dataset_with_clustering(

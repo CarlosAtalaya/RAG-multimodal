@@ -9,14 +9,13 @@ data/raw/
 
 data/processed/crops/
 
-# Embeddings (archivos .npy grandes)
-data/processed/embeddings/*.npy
+# Embeddings (archivos .npy  y .json grandes)
+data/processed/embeddings/
 
 docs/notes/
 
 # Índices FAISS
-outputs/vector_indices/*.index
-outputs/vector_indices/*.pkl
+outputs/vector_indices/
 
 # ==========================================
 # PYTHON
