@@ -1,0 +1,1552 @@
+[
+  {
+    "crop_id": "zona1_ok_2_3_1559568584233_zona_9_imageDANO_original_cluster_000",
+    "crop_path": "data/processed/crops/low_density_20samples/crops/clustered/zona1_ok_2_3_1559568584233_zona_9_imageDANO_original_cluster_000.jpg",
+    "source_image": "data/raw/stratified_subsets/low_density/zona1_ok_2_3_1559568584233_zona_9_imageDANO_original.jpg",
+    "source_image_size": [
+      3264,
+      2448
+    ],
+    "cluster_type": "single_defect",
+    "defect_count": 1,
+    "damage_types": [
+      "paint_peeling"
+    ],
+    "dominant_type": "paint_peeling",
+    "cluster_bbox": [
+      2756,
+      1202,
+      3026,
+      1440
+    ],
+    "cluster_center": [
+      2891,
+      1321
+    ],
+    "cluster_area": 37380,
+    "relative_position": {
+      "x": 0.8857230392156863,
+      "y": 0.5396241830065359
+    },
+    "spatial_zone": "middle_right",
+    "included_defects": [
+      {
+        "defect_idx": 0,
+        "damage_type": "paint_peeling",
+        "bbox": [
+          2786,
+          1232,
+          2996,
+          1410
+        ],
+        "area": 37380,
+        "polygon_coords": [
+          [
+            2786,
+            1394
+          ],
+          [
+            2797,
+            1389
+          ],
+          [
+            2887,
+            1345
+          ],
+          [
+            2925,
+            1316
+          ],
+          [
+            2939,
+            1286
+          ],
+          [
+            2953,
+            1238
+          ],
+          [
+            2963,
+            1232
+          ],
+          [
+            2984,
+            1257
+          ],
+          [
+            2996,
+            1306
+          ],
+          [
+            2979,
+            1357
+          ],
+          [
+            2939,
+            1397
+          ],
+          [
+            2895,
+            1400
+          ],
+          [
+            2879,
+            1384
+          ],
+          [
+            2854,
+            1405
+          ],
+          [
+            2823,
+            1410
+          ]
+        ]
+      }
+    ],
+    "crop_size": [
+      448,
+      448
+    ],
+    "padding_applied": 30,
+    "is_edge_defect": true,
+    "relative_size": "very_small",
+    "embedding_index": 0,
+    "embedding_model": "dinov3-vitl16",
+    "embedding_model_full": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "embedding_dim": 1024,
+    "embedding_norm": 0.9987769722938538
+  },
+  {
+    "crop_id": "zona1_ok_2_3_1555662607808_zona_5_imageDANO_original_cluster_000",
+    "crop_path": "data/processed/crops/low_density_20samples/crops/clustered/zona1_ok_2_3_1555662607808_zona_5_imageDANO_original_cluster_000.jpg",
+    "source_image": "data/raw/stratified_subsets/low_density/zona1_ok_2_3_1555662607808_zona_5_imageDANO_original.jpg",
+    "source_image_size": [
+      3264,
+      2448
+    ],
+    "cluster_type": "single_defect",
+    "defect_count": 1,
+    "damage_types": [
+      "surface_scratch"
+    ],
+    "dominant_type": "surface_scratch",
+    "cluster_bbox": [
+      1569,
+      1718,
+      1689,
+      1836
+    ],
+    "cluster_center": [
+      1629,
+      1777
+    ],
+    "cluster_area": 3480,
+    "relative_position": {
+      "x": 0.4990808823529412,
+      "y": 0.7258986928104575
+    },
+    "spatial_zone": "bottom_center",
+    "included_defects": [
+      {
+        "defect_idx": 0,
+        "damage_type": "surface_scratch",
+        "bbox": [
+          1599,
+          1748,
+          1659,
+          1806
+        ],
+        "area": 3480,
+        "polygon_coords": [
+          [
+            1599,
+            1795
+          ],
+          [
+            1612,
+            1806
+          ],
+          [
+            1659,
+            1764
+          ],
+          [
+            1649,
+            1748
+          ]
+        ]
+      }
+    ],
+    "crop_size": [
+      448,
+      448
+    ],
+    "padding_applied": 30,
+    "is_edge_defect": false,
+    "relative_size": "very_small",
+    "embedding_index": 1,
+    "embedding_model": "dinov3-vitl16",
+    "embedding_model_full": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "embedding_dim": 1024,
+    "embedding_norm": 0.9980155825614929
+  },
+  {
+    "crop_id": "zona1_ok_2_3_1559911635804_zona_8_imageDANO_original_cluster_000",
+    "crop_path": "data/processed/crops/low_density_20samples/crops/clustered/zona1_ok_2_3_1559911635804_zona_8_imageDANO_original_cluster_000.jpg",
+    "source_image": "data/raw/stratified_subsets/low_density/zona1_ok_2_3_1559911635804_zona_8_imageDANO_original.jpg",
+    "source_image_size": [
+      3264,
+      2448
+    ],
+    "cluster_type": "single_defect",
+    "defect_count": 1,
+    "damage_types": [
+      "surface_scratch"
+    ],
+    "dominant_type": "surface_scratch",
+    "cluster_bbox": [
+      922,
+      1232,
+      1984,
+      1380
+    ],
+    "cluster_center": [
+      1453,
+      1306
+    ],
+    "cluster_area": 88176,
+    "relative_position": {
+      "x": 0.44515931372549017,
+      "y": 0.5334967320261438
+    },
+    "spatial_zone": "middle_center",
+    "included_defects": [
+      {
+        "defect_idx": 0,
+        "damage_type": "surface_scratch",
+        "bbox": [
+          952,
+          1262,
+          1954,
+          1350
+        ],
+        "area": 88176,
+        "polygon_coords": [
+          [
+            973,
+            1262
+          ],
+          [
+            954,
+            1274
+          ],
+          [
+            952,
+            1283
+          ],
+          [
+            1770,
+            1330
+          ],
+          [
+            1954,
+            1350
+          ],
+          [
+            1931,
+            1321
+          ],
+          [
+            1808,
+            1310
+          ],
+          [
+            1734,
+            1289
+          ],
+          [
+            1690,
+            1292
+          ],
+          [
+            1689,
+            1305
+          ]
+        ]
+      }
+    ],
+    "crop_size": [
+      448,
+      448
+    ],
+    "padding_applied": 30,
+    "is_edge_defect": false,
+    "relative_size": "small",
+    "embedding_index": 2,
+    "embedding_model": "dinov3-vitl16",
+    "embedding_model_full": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "embedding_dim": 1024,
+    "embedding_norm": 0.9989393949508667
+  },
+  {
+    "crop_id": "zona1_ok_2_3_1555425121670_zona_5_imageDANO_original_cluster_000",
+    "crop_path": "data/processed/crops/low_density_20samples/crops/clustered/zona1_ok_2_3_1555425121670_zona_5_imageDANO_original_cluster_000.jpg",
+    "source_image": "data/raw/stratified_subsets/low_density/zona1_ok_2_3_1555425121670_zona_5_imageDANO_original.jpg",
+    "source_image_size": [
+      3264,
+      2448
+    ],
+    "cluster_type": "single_defect",
+    "defect_count": 1,
+    "damage_types": [
+      "surface_scratch"
+    ],
+    "dominant_type": "surface_scratch",
+    "cluster_bbox": [
+      467,
+      1591,
+      598,
+      1683
+    ],
+    "cluster_center": [
+      532,
+      1637
+    ],
+    "cluster_area": 2272,
+    "relative_position": {
+      "x": 0.16314338235294118,
+      "y": 0.6687091503267973
+    },
+    "spatial_zone": "middle_left",
+    "included_defects": [
+      {
+        "defect_idx": 0,
+        "damage_type": "surface_scratch",
+        "bbox": [
+          497,
+          1621,
+          568,
+          1653
+        ],
+        "area": 2272,
+        "polygon_coords": [
+          [
+            497,
+            1647
+          ],
+          [
+            519,
+            1621
+          ],
+          [
+            568,
+            1629
+          ],
+          [
+            563,
+            1653
+          ]
+        ]
+      }
+    ],
+    "crop_size": [
+      448,
+      448
+    ],
+    "padding_applied": 30,
+    "is_edge_defect": false,
+    "relative_size": "very_small",
+    "embedding_index": 3,
+    "embedding_model": "dinov3-vitl16",
+    "embedding_model_full": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "embedding_dim": 1024,
+    "embedding_norm": 1.0005439519882202
+  },
+  {
+    "crop_id": "zona1_ok_2_3_1555082006842_zona_5_imageDANO_original_cluster_000",
+    "crop_path": "data/processed/crops/low_density_20samples/crops/clustered/zona1_ok_2_3_1555082006842_zona_5_imageDANO_original_cluster_000.jpg",
+    "source_image": "data/raw/stratified_subsets/low_density/zona1_ok_2_3_1555082006842_zona_5_imageDANO_original.jpg",
+    "source_image_size": [
+      3264,
+      2448
+    ],
+    "cluster_type": "single_defect",
+    "defect_count": 1,
+    "damage_types": [
+      "surface_scratch"
+    ],
+    "dominant_type": "surface_scratch",
+    "cluster_bbox": [
+      1256,
+      1789,
+      1428,
+      1878
+    ],
+    "cluster_center": [
+      1342,
+      1833
+    ],
+    "cluster_area": 3248,
+    "relative_position": {
+      "x": 0.4111519607843137,
+      "y": 0.7489787581699346
+    },
+    "spatial_zone": "bottom_center",
+    "included_defects": [
+      {
+        "defect_idx": 0,
+        "damage_type": "surface_scratch",
+        "bbox": [
+          1286,
+          1819,
+          1398,
+          1848
+        ],
+        "area": 3248,
+        "polygon_coords": [
+          [
+            1286,
+            1848
+          ],
+          [
+            1292,
+            1819
+          ],
+          [
+            1398,
+            1827
+          ],
+          [
+            1398,
+            1841
+          ],
+          [
+            1362,
+            1841
+          ]
+        ]
+      }
+    ],
+    "crop_size": [
+      448,
+      448
+    ],
+    "padding_applied": 30,
+    "is_edge_defect": false,
+    "relative_size": "very_small",
+    "embedding_index": 4,
+    "embedding_model": "dinov3-vitl16",
+    "embedding_model_full": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "embedding_dim": 1024,
+    "embedding_norm": 1.0022352933883667
+  },
+  {
+    "crop_id": "zona1_ok_2_3_1556191666874_zona_1_imageDANO_original_cluster_000",
+    "crop_path": "data/processed/crops/low_density_20samples/crops/clustered/zona1_ok_2_3_1556191666874_zona_1_imageDANO_original_cluster_000.jpg",
+    "source_image": "data/raw/stratified_subsets/low_density/zona1_ok_2_3_1556191666874_zona_1_imageDANO_original.jpg",
+    "source_image_size": [
+      3264,
+      2448
+    ],
+    "cluster_type": "single_defect",
+    "defect_count": 1,
+    "damage_types": [
+      "surface_scratch"
+    ],
+    "dominant_type": "surface_scratch",
+    "cluster_bbox": [
+      1370,
+      1659,
+      1525,
+      1767
+    ],
+    "cluster_center": [
+      1447,
+      1713
+    ],
+    "cluster_area": 4560,
+    "relative_position": {
+      "x": 0.44347426470588236,
+      "y": 0.6997549019607843
+    },
+    "spatial_zone": "bottom_center",
+    "included_defects": [
+      {
+        "defect_idx": 0,
+        "damage_type": "surface_scratch",
+        "bbox": [
+          1400,
+          1689,
+          1495,
+          1737
+        ],
+        "area": 4560,
+        "polygon_coords": [
+          [
+            1400,
+            1724
+          ],
+          [
+            1403,
+            1737
+          ],
+          [
+            1474,
+            1716
+          ],
+          [
+            1495,
+            1693
+          ],
+          [
+            1485,
+            1689
+          ],
+          [
+            1455,
+            1705
+          ]
+        ]
+      }
+    ],
+    "crop_size": [
+      448,
+      448
+    ],
+    "padding_applied": 30,
+    "is_edge_defect": false,
+    "relative_size": "very_small",
+    "embedding_index": 5,
+    "embedding_model": "dinov3-vitl16",
+    "embedding_model_full": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "embedding_dim": 1024,
+    "embedding_norm": 1.0027081966400146
+  },
+  {
+    "crop_id": "zona1_ok_2_3_1554052729594_zona_3_imageDANO_original_cluster_000",
+    "crop_path": "data/processed/crops/low_density_20samples/crops/clustered/zona1_ok_2_3_1554052729594_zona_3_imageDANO_original_cluster_000.jpg",
+    "source_image": "data/raw/stratified_subsets/low_density/zona1_ok_2_3_1554052729594_zona_3_imageDANO_original.jpg",
+    "source_image_size": [
+      3264,
+      2448
+    ],
+    "cluster_type": "single_defect",
+    "defect_count": 1,
+    "damage_types": [
+      "surface_scratch"
+    ],
+    "dominant_type": "surface_scratch",
+    "cluster_bbox": [
+      1797,
+      841,
+      1881,
+      925
+    ],
+    "cluster_center": [
+      1839,
+      883
+    ],
+    "cluster_area": 576,
+    "relative_position": {
+      "x": 0.5634191176470589,
+      "y": 0.36070261437908496
+    },
+    "spatial_zone": "middle_center",
+    "included_defects": [
+      {
+        "defect_idx": 0,
+        "damage_type": "surface_scratch",
+        "bbox": [
+          1827,
+          871,
+          1851,
+          895
+        ],
+        "area": 576,
+        "polygon_coords": [
+          [
+            1827,
+            873
+          ],
+          [
+            1827,
+            895
+          ],
+          [
+            1851,
+            888
+          ],
+          [
+            1849,
+            871
+          ]
+        ]
+      }
+    ],
+    "crop_size": [
+      448,
+      448
+    ],
+    "padding_applied": 30,
+    "is_edge_defect": false,
+    "relative_size": "very_small",
+    "embedding_index": 6,
+    "embedding_model": "dinov3-vitl16",
+    "embedding_model_full": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "embedding_dim": 1024,
+    "embedding_norm": 0.9995204210281372
+  },
+  {
+    "crop_id": "zona1_ok_2_3_1556611886904_zona_3_imageDANO_original_cluster_000",
+    "crop_path": "data/processed/crops/low_density_20samples/crops/clustered/zona1_ok_2_3_1556611886904_zona_3_imageDANO_original_cluster_000.jpg",
+    "source_image": "data/raw/stratified_subsets/low_density/zona1_ok_2_3_1556611886904_zona_3_imageDANO_original.jpg",
+    "source_image_size": [
+      3264,
+      2448
+    ],
+    "cluster_type": "single_defect",
+    "defect_count": 1,
+    "damage_types": [
+      "crack"
+    ],
+    "dominant_type": "crack",
+    "cluster_bbox": [
+      2026,
+      1731,
+      2119,
+      1851
+    ],
+    "cluster_center": [
+      2072,
+      1791
+    ],
+    "cluster_area": 1980,
+    "relative_position": {
+      "x": 0.6349571078431373,
+      "y": 0.7316176470588235
+    },
+    "spatial_zone": "bottom_center",
+    "included_defects": [
+      {
+        "defect_idx": 0,
+        "damage_type": "crack",
+        "bbox": [
+          2056,
+          1761,
+          2089,
+          1821
+        ],
+        "area": 1980,
+        "polygon_coords": [
+          [
+            2059,
+            1769
+          ],
+          [
+            2056,
+            1792
+          ],
+          [
+            2064,
+            1814
+          ],
+          [
+            2075,
+            1821
+          ],
+          [
+            2089,
+            1819
+          ],
+          [
+            2085,
+            1782
+          ],
+          [
+            2077,
+            1761
+          ]
+        ]
+      }
+    ],
+    "crop_size": [
+      448,
+      448
+    ],
+    "padding_applied": 30,
+    "is_edge_defect": false,
+    "relative_size": "very_small",
+    "embedding_index": 7,
+    "embedding_model": "dinov3-vitl16",
+    "embedding_model_full": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "embedding_dim": 1024,
+    "embedding_norm": 0.9988152980804443
+  },
+  {
+    "crop_id": "zona1_ok_2_3_1557469244206_zona_10_imageDANO_original_cluster_000",
+    "crop_path": "data/processed/crops/low_density_20samples/crops/clustered/zona1_ok_2_3_1557469244206_zona_10_imageDANO_original_cluster_000.jpg",
+    "source_image": "data/raw/stratified_subsets/low_density/zona1_ok_2_3_1557469244206_zona_10_imageDANO_original.jpg",
+    "source_image_size": [
+      3264,
+      2448
+    ],
+    "cluster_type": "single_defect",
+    "defect_count": 1,
+    "damage_types": [
+      "surface_scratch"
+    ],
+    "dominant_type": "surface_scratch",
+    "cluster_bbox": [
+      1167,
+      1076,
+      2767,
+      1257
+    ],
+    "cluster_center": [
+      1967,
+      1166
+    ],
+    "cluster_area": 186340,
+    "relative_position": {
+      "x": 0.6026348039215687,
+      "y": 0.4765114379084967
+    },
+    "spatial_zone": "middle_center",
+    "included_defects": [
+      {
+        "defect_idx": 0,
+        "damage_type": "surface_scratch",
+        "bbox": [
+          1197,
+          1106,
+          2737,
+          1227
+        ],
+        "area": 186340,
+        "polygon_coords": [
+          [
+            1825,
+            1196
+          ],
+          [
+            1657,
+            1210
+          ],
+          [
+            1523,
+            1210
+          ],
+          [
+            1386,
+            1195
+          ],
+          [
+            1203,
+            1194
+          ],
+          [
+            1197,
+            1205
+          ],
+          [
+            1409,
+            1212
+          ],
+          [
+            1479,
+            1223
+          ],
+          [
+            1630,
+            1227
+          ],
+          [
+            1849,
+            1215
+          ],
+          [
+            2004,
+            1183
+          ],
+          [
+            2123,
+            1148
+          ],
+          [
+            2257,
+            1124
+          ],
+          [
+            2400,
+            1133
+          ],
+          [
+            2532,
+            1161
+          ],
+          [
+            2659,
+            1170
+          ],
+          [
+            2733,
+            1185
+          ],
+          [
+            2737,
+            1170
+          ],
+          [
+            2662,
+            1156
+          ],
+          [
+            2535,
+            1144
+          ],
+          [
+            2422,
+            1123
+          ],
+          [
+            2278,
+            1106
+          ],
+          [
+            2170,
+            1116
+          ],
+          [
+            1996,
+            1166
+          ],
+          [
+            1852,
+            1199
+          ]
+        ]
+      }
+    ],
+    "crop_size": [
+      448,
+      448
+    ],
+    "padding_applied": 30,
+    "is_edge_defect": false,
+    "relative_size": "medium",
+    "embedding_index": 8,
+    "embedding_model": "dinov3-vitl16",
+    "embedding_model_full": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "embedding_dim": 1024,
+    "embedding_norm": 1.0008492469787598
+  },
+  {
+    "crop_id": "zona1_ok_2_3_1554906159261_zona_3_imageDANO_original_cluster_000",
+    "crop_path": "data/processed/crops/low_density_20samples/crops/clustered/zona1_ok_2_3_1554906159261_zona_3_imageDANO_original_cluster_000.jpg",
+    "source_image": "data/raw/stratified_subsets/low_density/zona1_ok_2_3_1554906159261_zona_3_imageDANO_original.jpg",
+    "source_image_size": [
+      4000,
+      3000
+    ],
+    "cluster_type": "single_defect",
+    "defect_count": 1,
+    "damage_types": [
+      "misaligned_part"
+    ],
+    "dominant_type": "misaligned_part",
+    "cluster_bbox": [
+      1462,
+      1803,
+      1893,
+      2056
+    ],
+    "cluster_center": [
+      1677,
+      1929
+    ],
+    "cluster_area": 71603,
+    "relative_position": {
+      "x": 0.419375,
+      "y": 0.6431666666666667
+    },
+    "spatial_zone": "middle_center",
+    "included_defects": [
+      {
+        "defect_idx": 0,
+        "damage_type": "misaligned_part",
+        "bbox": [
+          1492,
+          1833,
+          1863,
+          2026
+        ],
+        "area": 71603,
+        "polygon_coords": [
+          [
+            1492,
+            1873
+          ],
+          [
+            1493,
+            1846
+          ],
+          [
+            1519,
+            1833
+          ],
+          [
+            1611,
+            1868
+          ],
+          [
+            1771,
+            1951
+          ],
+          [
+            1863,
+            1998
+          ],
+          [
+            1853,
+            2026
+          ],
+          [
+            1793,
+            2003
+          ],
+          [
+            1676,
+            1956
+          ],
+          [
+            1554,
+            1900
+          ]
+        ]
+      }
+    ],
+    "crop_size": [
+      448,
+      448
+    ],
+    "padding_applied": 30,
+    "is_edge_defect": false,
+    "relative_size": "small",
+    "embedding_index": 9,
+    "embedding_model": "dinov3-vitl16",
+    "embedding_model_full": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "embedding_dim": 1024,
+    "embedding_norm": 0.9998652338981628
+  },
+  {
+    "crop_id": "zona1_ok_2_3_1555324819434_zona_5_imageDANO_original_cluster_000",
+    "crop_path": "data/processed/crops/low_density_20samples/crops/clustered/zona1_ok_2_3_1555324819434_zona_5_imageDANO_original_cluster_000.jpg",
+    "source_image": "data/raw/stratified_subsets/low_density/zona1_ok_2_3_1555324819434_zona_5_imageDANO_original.jpg",
+    "source_image_size": [
+      3264,
+      2448
+    ],
+    "cluster_type": "single_defect",
+    "defect_count": 1,
+    "damage_types": [
+      "missing_part"
+    ],
+    "dominant_type": "missing_part",
+    "cluster_bbox": [
+      546,
+      1857,
+      729,
+      2178
+    ],
+    "cluster_center": [
+      637,
+      2017
+    ],
+    "cluster_area": 32103,
+    "relative_position": {
+      "x": 0.1953125,
+      "y": 0.8241421568627451
+    },
+    "spatial_zone": "bottom_left",
+    "included_defects": [
+      {
+        "defect_idx": 0,
+        "damage_type": "missing_part",
+        "bbox": [
+          576,
+          1887,
+          699,
+          2148
+        ],
+        "area": 32103,
+        "polygon_coords": [
+          [
+            579,
+            1887
+          ],
+          [
+            617,
+            1904
+          ],
+          [
+            682,
+            1917
+          ],
+          [
+            699,
+            1950
+          ],
+          [
+            696,
+            1966
+          ],
+          [
+            685,
+            1982
+          ],
+          [
+            688,
+            2037
+          ],
+          [
+            688,
+            2059
+          ],
+          [
+            688,
+            2064
+          ],
+          [
+            682,
+            2102
+          ],
+          [
+            677,
+            2146
+          ],
+          [
+            660,
+            2148
+          ],
+          [
+            641,
+            2121
+          ],
+          [
+            625,
+            2088
+          ],
+          [
+            625,
+            2061
+          ],
+          [
+            614,
+            2026
+          ],
+          [
+            601,
+            1996
+          ],
+          [
+            601,
+            1993
+          ],
+          [
+            592,
+            1972
+          ],
+          [
+            576,
+            1950
+          ]
+        ]
+      }
+    ],
+    "crop_size": [
+      448,
+      448
+    ],
+    "padding_applied": 30,
+    "is_edge_defect": false,
+    "relative_size": "very_small",
+    "embedding_index": 10,
+    "embedding_model": "dinov3-vitl16",
+    "embedding_model_full": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "embedding_dim": 1024,
+    "embedding_norm": 1.0019901990890503
+  },
+  {
+    "crop_id": "zona1_ok_2_3_1565188627660_zona_9_imageDANO_original_cluster_000",
+    "crop_path": "data/processed/crops/low_density_20samples/crops/clustered/zona1_ok_2_3_1565188627660_zona_9_imageDANO_original_cluster_000.jpg",
+    "source_image": "data/raw/stratified_subsets/low_density/zona1_ok_2_3_1565188627660_zona_9_imageDANO_original.jpg",
+    "source_image_size": [
+      3264,
+      2448
+    ],
+    "cluster_type": "single_defect",
+    "defect_count": 1,
+    "damage_types": [
+      "dent"
+    ],
+    "dominant_type": "dent",
+    "cluster_bbox": [
+      2023,
+      1202,
+      2167,
+      1300
+    ],
+    "cluster_center": [
+      2095,
+      1251
+    ],
+    "cluster_area": 3192,
+    "relative_position": {
+      "x": 0.6418504901960784,
+      "y": 0.5110294117647058
+    },
+    "spatial_zone": "middle_center",
+    "included_defects": [
+      {
+        "defect_idx": 0,
+        "damage_type": "dent",
+        "bbox": [
+          2053,
+          1232,
+          2137,
+          1270
+        ],
+        "area": 3192,
+        "polygon_coords": [
+          [
+            2121,
+            1270
+          ],
+          [
+            2053,
+            1259
+          ],
+          [
+            2061,
+            1232
+          ],
+          [
+            2137,
+            1245
+          ]
+        ]
+      }
+    ],
+    "crop_size": [
+      448,
+      448
+    ],
+    "padding_applied": 30,
+    "is_edge_defect": false,
+    "relative_size": "very_small",
+    "embedding_index": 11,
+    "embedding_model": "dinov3-vitl16",
+    "embedding_model_full": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "embedding_dim": 1024,
+    "embedding_norm": 1.0020703077316284
+  },
+  {
+    "crop_id": "zona1_ok_2_3_1556637849502_zona_2_imageDANO_original_cluster_000",
+    "crop_path": "data/processed/crops/low_density_20samples/crops/clustered/zona1_ok_2_3_1556637849502_zona_2_imageDANO_original_cluster_000.jpg",
+    "source_image": "data/raw/stratified_subsets/low_density/zona1_ok_2_3_1556637849502_zona_2_imageDANO_original.jpg",
+    "source_image_size": [
+      3264,
+      2448
+    ],
+    "cluster_type": "single_defect",
+    "defect_count": 1,
+    "damage_types": [
+      "crack"
+    ],
+    "dominant_type": "crack",
+    "cluster_bbox": [
+      2089,
+      1373,
+      2178,
+      1454
+    ],
+    "cluster_center": [
+      2133,
+      1413
+    ],
+    "cluster_area": 609,
+    "relative_position": {
+      "x": 0.6536458333333334,
+      "y": 0.5774101307189542
+    },
+    "spatial_zone": "middle_center",
+    "included_defects": [
+      {
+        "defect_idx": 0,
+        "damage_type": "crack",
+        "bbox": [
+          2119,
+          1403,
+          2148,
+          1424
+        ],
+        "area": 609,
+        "polygon_coords": [
+          [
+            2143,
+            1404
+          ],
+          [
+            2122,
+            1403
+          ],
+          [
+            2119,
+            1414
+          ],
+          [
+            2125,
+            1422
+          ],
+          [
+            2136,
+            1424
+          ],
+          [
+            2145,
+            1424
+          ],
+          [
+            2148,
+            1412
+          ]
+        ]
+      }
+    ],
+    "crop_size": [
+      448,
+      448
+    ],
+    "padding_applied": 30,
+    "is_edge_defect": false,
+    "relative_size": "very_small",
+    "embedding_index": 12,
+    "embedding_model": "dinov3-vitl16",
+    "embedding_model_full": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "embedding_dim": 1024,
+    "embedding_norm": 0.9994965195655823
+  },
+  {
+    "crop_id": "zona1_ok_2_3_1558695183939_zona_9_imageDANO_original_cluster_000",
+    "crop_path": "data/processed/crops/low_density_20samples/crops/clustered/zona1_ok_2_3_1558695183939_zona_9_imageDANO_original_cluster_000.jpg",
+    "source_image": "data/raw/stratified_subsets/low_density/zona1_ok_2_3_1558695183939_zona_9_imageDANO_original.jpg",
+    "source_image_size": [
+      3264,
+      2448
+    ],
+    "cluster_type": "single_defect",
+    "defect_count": 1,
+    "damage_types": [
+      "dent"
+    ],
+    "dominant_type": "dent",
+    "cluster_bbox": [
+      2839,
+      1226,
+      2951,
+      1368
+    ],
+    "cluster_center": [
+      2895,
+      1297
+    ],
+    "cluster_area": 4264,
+    "relative_position": {
+      "x": 0.8869485294117647,
+      "y": 0.5298202614379085
+    },
+    "spatial_zone": "middle_right",
+    "included_defects": [
+      {
+        "defect_idx": 0,
+        "damage_type": "dent",
+        "bbox": [
+          2869,
+          1256,
+          2921,
+          1338
+        ],
+        "area": 4264,
+        "polygon_coords": [
+          [
+            2899,
+            1256
+          ],
+          [
+            2921,
+            1270
+          ],
+          [
+            2888,
+            1338
+          ],
+          [
+            2869,
+            1321
+          ]
+        ]
+      }
+    ],
+    "crop_size": [
+      448,
+      448
+    ],
+    "padding_applied": 30,
+    "is_edge_defect": true,
+    "relative_size": "very_small",
+    "embedding_index": 13,
+    "embedding_model": "dinov3-vitl16",
+    "embedding_model_full": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "embedding_dim": 1024,
+    "embedding_norm": 1.0008773803710938
+  },
+  {
+    "crop_id": "zona1_ok_2_3_1561026277045_zona_10_imageDANO_original_cluster_000",
+    "crop_path": "data/processed/crops/low_density_20samples/crops/clustered/zona1_ok_2_3_1561026277045_zona_10_imageDANO_original_cluster_000.jpg",
+    "source_image": "data/raw/stratified_subsets/low_density/zona1_ok_2_3_1561026277045_zona_10_imageDANO_original.jpg",
+    "source_image_size": [
+      3264,
+      2448
+    ],
+    "cluster_type": "single_defect",
+    "defect_count": 1,
+    "damage_types": [
+      "deep_scratch"
+    ],
+    "dominant_type": "deep_scratch",
+    "cluster_bbox": [
+      1534,
+      1596,
+      1789,
+      1838
+    ],
+    "cluster_center": [
+      1661,
+      1717
+    ],
+    "cluster_area": 35490,
+    "relative_position": {
+      "x": 0.5090379901960784,
+      "y": 0.7013888888888888
+    },
+    "spatial_zone": "bottom_center",
+    "included_defects": [
+      {
+        "defect_idx": 0,
+        "damage_type": "deep_scratch",
+        "bbox": [
+          1564,
+          1626,
+          1759,
+          1808
+        ],
+        "area": 35490,
+        "polygon_coords": [
+          [
+            1691,
+            1626
+          ],
+          [
+            1564,
+            1645
+          ],
+          [
+            1645,
+            1757
+          ],
+          [
+            1691,
+            1808
+          ],
+          [
+            1759,
+            1751
+          ]
+        ]
+      }
+    ],
+    "crop_size": [
+      448,
+      448
+    ],
+    "padding_applied": 30,
+    "is_edge_defect": false,
+    "relative_size": "very_small",
+    "embedding_index": 14,
+    "embedding_model": "dinov3-vitl16",
+    "embedding_model_full": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "embedding_dim": 1024,
+    "embedding_norm": 1.0005073547363281
+  },
+  {
+    "crop_id": "zona1_ok_22_4_1556709527775_zona_5_imageDANO_original_cluster_000",
+    "crop_path": "data/processed/crops/low_density_20samples/crops/clustered/zona1_ok_22_4_1556709527775_zona_5_imageDANO_original_cluster_000.jpg",
+    "source_image": "data/raw/stratified_subsets/low_density/zona1_ok_22_4_1556709527775_zona_5_imageDANO_original.jpg",
+    "source_image_size": [
+      3264,
+      2448
+    ],
+    "cluster_type": "single_defect",
+    "defect_count": 1,
+    "damage_types": [
+      "paint_peeling"
+    ],
+    "dominant_type": "paint_peeling",
+    "cluster_bbox": [
+      2180,
+      1793,
+      2372,
+      1911
+    ],
+    "cluster_center": [
+      2276,
+      1852
+    ],
+    "cluster_area": 7656,
+    "relative_position": {
+      "x": 0.6973039215686274,
+      "y": 0.7565359477124183
+    },
+    "spatial_zone": "bottom_right",
+    "included_defects": [
+      {
+        "defect_idx": 0,
+        "damage_type": "paint_peeling",
+        "bbox": [
+          2210,
+          1823,
+          2342,
+          1881
+        ],
+        "area": 7656,
+        "polygon_coords": [
+          [
+            2222,
+            1844
+          ],
+          [
+            2210,
+            1868
+          ],
+          [
+            2249,
+            1881
+          ],
+          [
+            2342,
+            1878
+          ],
+          [
+            2331,
+            1824
+          ],
+          [
+            2264,
+            1823
+          ]
+        ]
+      }
+    ],
+    "crop_size": [
+      448,
+      448
+    ],
+    "padding_applied": 30,
+    "is_edge_defect": false,
+    "relative_size": "very_small",
+    "embedding_index": 15,
+    "embedding_model": "dinov3-vitl16",
+    "embedding_model_full": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "embedding_dim": 1024,
+    "embedding_norm": 1.0010849237442017
+  },
+  {
+    "crop_id": "zona1_ok_2_3_1556613550603_zona_3_imageDANO_original_cluster_000",
+    "crop_path": "data/processed/crops/low_density_20samples/crops/clustered/zona1_ok_2_3_1556613550603_zona_3_imageDANO_original_cluster_000.jpg",
+    "source_image": "data/raw/stratified_subsets/low_density/zona1_ok_2_3_1556613550603_zona_3_imageDANO_original.jpg",
+    "source_image_size": [
+      3264,
+      2448
+    ],
+    "cluster_type": "single_defect",
+    "defect_count": 1,
+    "damage_types": [
+      "dent"
+    ],
+    "dominant_type": "dent",
+    "cluster_bbox": [
+      2456,
+      1106,
+      2554,
+      1199
+    ],
+    "cluster_center": [
+      2505,
+      1152
+    ],
+    "cluster_area": 1254,
+    "relative_position": {
+      "x": 0.7674632352941176,
+      "y": 0.4707924836601307
+    },
+    "spatial_zone": "middle_right",
+    "included_defects": [
+      {
+        "defect_idx": 0,
+        "damage_type": "dent",
+        "bbox": [
+          2486,
+          1136,
+          2524,
+          1169
+        ],
+        "area": 1254,
+        "polygon_coords": [
+          [
+            2499,
+            1169
+          ],
+          [
+            2524,
+            1169
+          ],
+          [
+            2524,
+            1142
+          ],
+          [
+            2502,
+            1136
+          ],
+          [
+            2486,
+            1145
+          ]
+        ]
+      }
+    ],
+    "crop_size": [
+      448,
+      448
+    ],
+    "padding_applied": 30,
+    "is_edge_defect": false,
+    "relative_size": "very_small",
+    "embedding_index": 16,
+    "embedding_model": "dinov3-vitl16",
+    "embedding_model_full": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "embedding_dim": 1024,
+    "embedding_norm": 0.9998520612716675
+  }
+]

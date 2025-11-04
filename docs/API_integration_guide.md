@@ -262,7 +262,7 @@ class Qwen3VLEmbedder:
 
 ---
 
-### 🔧 **OPCIÓN B: Usar Sentence Transformer + Descripciones VLM**
+### 🔧 **OPCIÓN B: Usar Sentence Transformer + Descripciones VLM** (ES LA QUE SE HA USADO EN EL CODIGO, A TRAVÉS DE 03_generate_embeddings_qwen3vl_API.py)
 
 Si no quieres modificar tu API, usa el VLM para generar descripciones y luego embeddings con otro modelo:
 
@@ -665,31 +665,18 @@ if __name__ == "__main__":
 ---
 
 ## 🚀 INICIO RÁPIDO
+# 1. Preparar dataset (estrarificado con 3 subcategorías de distintas densidades o uno en general)
 
-```bash
-# 1. Instalar dependencia adicional
-pip install sentence-transformers
+# 2. Generar crops mediante tecnica de clusterización
 
-# 2. Test de tu API
-python tests/test_qwen_api_integration.py
-
-# 3. Generar embeddings (Opción B)
-python scripts/03_generate_embeddings.py
+# 3. Generar embeddings (Con QWEN3VL API o con DINOV3)
+python scripts/03_generate_embeddings_*.py
 
 # 4. Construir índice
-python scripts/04_build_indices.py
+python scripts/04_build_faiss_index.py
 
 # 5. Probar RAG
 python scripts/05_run_inference.py
 ```
 
 ---
-
-## 📞 SIGUIENTE PASO
-
-**¿Cuál opción prefieres para el POC?**
-
-- **Opción B (Híbrida)**: Empezar YA sin tocar la API ✅
-- **Opción A (Nativa)**: Modificar API primero para mejor calidad
-
-Te recomiendo **empezar con B** para validar rápido, y migrar a A si los resultados son prometedores.

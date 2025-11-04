@@ -1,0 +1,38 @@
+{
+  "timestamp": "2025-11-04T12:31:50.426333",
+  "model": {
+    "model_name": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "embedding_dim": 1024,
+    "device": "cuda",
+    "dtype": "torch.bfloat16",
+    "total_params": 303129600,
+    "patch_size": 16,
+    "num_registers": 4,
+    "hidden_size": 1024
+  },
+  "dataset": {
+    "total_crops": 17,
+    "valid_crops": 17,
+    "missing_crops": 0,
+    "metadata_path": "data/processed/crops/low_density_20samples/metadata/clustered_crops_metadata.json"
+  },
+  "processing": {
+    "batch_size": 16,
+    "total_time_seconds": 0.22586631774902344,
+    "time_per_image_seconds": 0.013286253985236673,
+    "init_time_seconds": 1.4551596641540527
+  },
+  "embeddings": {
+    "shape": [
+      17,
+      1024
+    ],
+    "dtype": "float32",
+    "norm_mean": 1.0003615617752075,
+    "norm_std": 0.001329778810031712
+  },
+  "output_files": {
+    "embeddings": "data/processed/embeddings/dinov3_embeddings/low_density_20samples/embeddings_dinov3_vitl.npy",
+    "metadata": "data/processed/embeddings/dinov3_embeddings/low_density_20samples/enriched_crops_metadata_dinov3_vitl.json"
+  }
+}

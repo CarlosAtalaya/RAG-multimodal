@@ -1,0 +1,11 @@
+{
+  "metadata_type": "CLUSTERING",
+  "index_type": "IndexHNSWFlat",
+  "n_vectors": 1024,
+  "embedding_dim": 1024,
+  "embeddings_path": "data/processed/embeddings/dinov3_embeddings/high_density_20samples/embeddings_dinov3_vitl.npy",
+  "metadata_path": "data/processed/embeddings/dinov3_embeddings/high_density_20samples/enriched_crops_metadata_dinov3_vitl.json",
+  "M": 32,
+  "efConstruction": 200,
+  "efSearch": 64
+}

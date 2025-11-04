@@ -20,19 +20,19 @@ Construir un sistema que:
 - **Embeddings**: Estrategia híbrida (Qwen3-VL + Sentence-Transformers)
 - **Vector DB**: FAISS (IndexHNSWFlat para POC)
 - **Lenguaje**: Python 3.12
-- **Dataset**: 100 imágenes POC (~2,143 crops de defectos)
+- **Dataset**: 60 imágenes POC 20/20/20 (high, medium and low defects density): high -> 1024 crops; medium -> 239 crops; low -> 17 crops
 
 ---
 
 ## 📊 Estado Actual del Proyecto
 ```
-PROGRESO GLOBAL: ████████████████░░░░░░░░░░░░ 60% (Fase 4/7 completada)
+PROGRESO GLOBAL: ████████████████░░░░░░░░░░░░ 60% (Fase 5/7 completada)
 
 ✅ FASE 1: Preparación Dataset         [100%] ━━━━━━━━━━ COMPLETADO
 ✅ FASE 2: Generación Crops             [100%] ━━━━━━━━━━ COMPLETADO
 ✅ FASE 3: Generación Embeddings        [100%] ━━━━━━━━━━ COMPLETADO
 ✅ FASE 4: Construcción Índice FAISS   [100%] ━━━━━━━━━━ COMPLETADO
-⏹️ FASE 5: RAG Retriever                [  0%] ░░░░░░░░░░ PENDIENTE
+✅ FASE 5: RAG Retriever               [100%] ━━━━━━━━━━ COMPLETADO
 ⏹️ FASE 6: Análisis Completo            [  0%] ░░░░░░░░░░ PENDIENTE
 ⏹️ FASE 7: Evaluación y Métricas        [  0%] ░░░░░░░░░░ PENDIENTE
 ```
@@ -150,15 +150,15 @@ curl http://localhost:8001/health
 python scripts/01_prepare_dataset.py
 
 # Fase 2: Generar crops
-python scripts/02_generate_crops.py
+python scripts/02_generate_clustered_crops.py
 
-# Fase 3: Generar embeddings (mini-POC 100 crops)
-python scripts/03_generate_embeddings_mini.py
+# Fase 3: Generar embeddings (con DINOv3 o con QWEN3VL-API)
+python scripts/03_generate_embeddings_dinov3
 
 # Fase 4: Construir índice FAISS
 python scripts/04_build_faiss_index.py
 
-# Fase 5: Probar retriever (en desarrollo)
+# Fase 5: Probar retriever
 python scripts/test_retriever.py
 ```
 
@@ -235,15 +235,10 @@ FAISS_INDEX_TYPE=IndexHNSWFlat
 ## 📊 Dataset
 
 ### POC (Actual)
-- **Imágenes**: 100 
-- **Defectos totales**: 2,155
-- **Crops generados**: 2,143
-- **Tipo dominante**: surface_scratch (89.2%)
+- **Imágenes**: 20 de alta densidad, 20 de media densidad y 20 de baja densidad de defectos
 
 ### Completo (Futuro)
-- **Imágenes**: 1,700
-- **Defectos estimados**: ~36,500
-- **Crops estimados**: ~36,000
+- **Imágenes**: 2.700
 
 ---
 
