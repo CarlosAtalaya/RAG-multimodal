@@ -14,8 +14,7 @@ data/processed/embeddings/
 
 docs/notes/
 
-# Índices FAISS
-outputs/vector_indices/
+outputs/
 
 # ==========================================
 # PYTHON

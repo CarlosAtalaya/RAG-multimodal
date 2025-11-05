@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.core.rag.retriever import DamageRAGRetriever
 from src.core.embeddings.dinov3_vitl_embedder import DINOv3ViTLEmbedder
+from src.core.api.ollama_client import OllamaVLMClient
 
 
 @dataclass
@@ -73,27 +74,29 @@ class EndToEndRAGEvaluator:
         index_path: Path,
         metadata_path: Path,
         embedder_type: str = 'dinov3',
-        qwen_api: str = "http://localhost:8001"
+        ollama_model: str = "qwen3-vl:4b"  # ← NUEVO
     ):
         print(f"\n{'='*70}")
-        print(f"🚀 INICIALIZANDO EVALUADOR RAG END-TO-END")
+        print(f"🚀 INICIALIZANDO EVALUADOR RAG END-TO-END (OLLAMA)")
         print(f"{'='*70}\n")
         
-        # Cargar retriever (índice FAISS del train set)
+        # Cargar retriever
         print("📦 Cargando retriever...")
         self.retriever = DamageRAGRetriever(
             index_path=index_path,
             metadata_path=metadata_path
         )
         
-        # Inicializar embedder para queries
+        # Inicializar embedder
         print(f"🔧 Inicializando embedder ({embedder_type})...")
         if embedder_type == 'dinov3':
             self.embedder = DINOv3ViTLEmbedder()
         else:
-            raise NotImplementedError(f"Embedder {embedder_type} no implementado aún")
+            raise NotImplementedError(f"Embedder {embedder_type} no implementado")
         
-        self.qwen_endpoint = f"{qwen_api}/qwen3/chat/completions"
+        # ✨ NUEVO: Cliente Ollama
+        print(f"🤖 Inicializando Ollama ({ollama_model})...")
+        self.vlm_client = OllamaVLMClient(model=ollama_model)
         
         print(f"✅ Inicialización completa\n")
     
@@ -185,120 +188,61 @@ class EndToEndRAGEvaluator:
         rag_context: str
     ) -> str:
         """
-        Genera respuesta usando Qwen3VL con contexto RAG
-        
-        Este es el PROMPT REAL que usarías en producción
+        Genera respuesta usando Ollama (reemplaza requests)
         """
         
-        # Cargar imagen
-        with open(image_path, 'rb') as f:
-            image_b64 = base64.b64encode(f.read()).decode('utf-8')
-        
-        # PROMPT PRODUCTIVO
+        # PROMPT (mismo que antes)
         prompt = f"""Eres un asistente experto en inspección de daños vehiculares.
 
-**Tu tarea**: Analizar la imagen del vehículo e identificar TODOS los daños visibles.
+    **Tu tarea**: Analizar la imagen del vehículo e identificar TODOS los daños visibles.
 
-**Para cada daño detectado, especifica**:
-1. Tipo de daño (surface_scratch, dent, crack, deep_scratch, paint_peeling, missing_part, missing_accessory, misaligned_part)
-2. Ubicación en el vehículo (ej: capó izquierdo, puerta trasera derecha)
-3. Severidad estimada (leve, moderada, grave)
+    **Para cada daño detectado, especifica**:
+    1. Tipo de daño (surface_scratch, dent, crack, deep_scratch, paint_peeling, missing_part, missing_accessory, misaligned_part)
+    2. Ubicación en el vehículo (ej: capó izquierdo, puerta trasera derecha)
+    3. Severidad estimada (leve, moderada, grave)
 
-**Contexto de casos similares en nuestra base de datos**:
-{rag_context}
+    **Contexto de casos similares en nuestra base de datos**:
+    {rag_context}
 
-**Instrucciones**:
-- Usa el contexto de casos similares para fundamentar tu análisis
-- Sé preciso y objetivo
-- Si hay múltiples daños, lista todos
-- Formato: JSON con lista de daños
+    **Instrucciones**:
+    - Usa el contexto de casos similares para fundamentar tu análisis
+    - Sé preciso y objetivo
+    - Si hay múltiples daños, lista todos
+    - Formato: JSON con lista de daños
 
-**Formato de respuesta esperado**:
-```json
-{{
-  "damages": [
+    **Formato de respuesta esperado**:
+    ```json
     {{
-      "type": "surface_scratch",
-      "location": "hood_center",
-      "severity": "moderate",
-      "confidence": "high"
-    }},
-    ...
-  ],
-  "summary": "Se detectaron X daños en total..."
-}}
-```
-"""
+    "damages": [
+        {{
+        "type": "surface_scratch",
+        "location": "hood_center",
+        "severity": "moderate",
+        "confidence": "high"
+        }},
+        ...
+    ],
+    "summary": "Se detectaron X daños en total..."
+    }}
+    ```
+    """
         
-        payload = {
-            "model": "Qwen3-VL-4B-Instruct",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{image_b64}"
-                            }
-                        }
-                    ]
-                }
-            ],
-            "max_tokens": 1024,
-            "temperature": 0.1
-        }
+        # ✨ NUEVO: Usar Ollama
+        try:
+            response = self.vlm_client.generate_with_retry(
+                prompt=prompt,
+                image_path=Path(image_path),
+                max_tokens=1024,
+                temperature=0.1,
+                max_retries=3,
+                retry_delay=5.0
+            )
+            
+            return response
         
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                response = requests.post(
-                    self.qwen_endpoint,
-                    json=payload,
-                    timeout=180
-                )
-
-                if response.status_code == 200:
-                    data = response.json()
-                    content = data['choices'][0]['message']['content']
-
-                    # 🧹 Limpieza explícita de memoria
-                    gc.collect()
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-
-                    return content
-
-                elif response.status_code == 500:
-                    # Esperar un poco y reintentar
-                    print(f"⚠️ API 500 (intento {attempt+1}/{max_retries}) — posible OOM, reintentando...")
-                    gc.collect()
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                    time.sleep(5)
-
-                else:
-                    return f"Error: API returned {response.status_code}"
-
-            except requests.exceptions.RequestException as e:
-                print(f"⚠️ Error de conexión: {e} (intento {attempt+1}/{max_retries})")
-                time.sleep(5)
-
-            except Exception as e:
-                print(f"⚠️ Excepción inesperada: {e} (intento {attempt+1}/{max_retries})")
-                gc.collect()
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                time.sleep(5)
-
-        # ==============================
-        # 4️⃣ Si falla todos los intentos
-        # ==============================
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        return "Error: API returned 500 (después de múltiples intentos)"
+        except Exception as e:
+            print(f"❌ Error en generación Ollama: {e}")
+            return f"Error: {str(e)}"
     
     def _calculate_recall(
         self,
