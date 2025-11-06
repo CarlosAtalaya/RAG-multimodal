@@ -5,76 +5,107 @@ import json
 import numpy as np
 import faiss
 import pickle
-from typing import List, Dict, Optional, Tuple
-from dataclasses import dataclass
+from typing import List, Dict, Optional
+from dataclasses import dataclass, field
+
+from .taxonomy_normalizer import TaxonomyNormalizer
+
 
 @dataclass
 class SearchResult:
-    """Resultado de una búsqueda"""
+    """Resultado de búsqueda con labels normalizados"""
     index: int
     distance: float
     crop_path: str
-    damage_type: str
-    image_path: str
-    bbox: List[float]
-    spatial_zone: str
-    metadata: Dict
+    damage_type: str                      # Normalizado
+    damage_type_original: str = ""        # Original
+    damage_type_confidence: float = 1.0   # Confianza
+    image_path: str = ""
+    bbox: List[float] = field(default_factory=list)
+    spatial_zone: str = ""
+    metadata: Dict = field(default_factory=dict)
+    all_damage_types: List[str] = field(default_factory=list)
+
 
 class DamageRAGRetriever:
-    """
-    Retriever para el sistema RAG multimodal
-    """
+    """Retriever con normalización taxonómica automática"""
     
     def __init__(
         self,
         index_path: Path,
         metadata_path: Path,
-        config_path: Path = None
+        config_path: Path = None,
+        enable_taxonomy_normalization: bool = True
     ):
-        """
-        Inicializa el retriever
-        
-        Args:
-            index_path: Ruta al índice FAISS
-            metadata_path: Ruta a metadata (pickle)
-            config_path: Ruta a configuración del índice
-        """
         print(f"🔧 Inicializando DamageRAGRetriever...")
         
-        # Cargar índice FAISS
+        # Cargar índice y metadata
         self.index = faiss.read_index(str(index_path))
-        print(f"   ✅ Índice FAISS cargado: {self.index.ntotal} vectores")
-        
-        # Cargar metadata
         with open(metadata_path, 'rb') as f:
             self.metadata = pickle.load(f)
-        print(f"   ✅ Metadata cargada: {len(self.metadata)} entries")
         
-        # Cargar config si existe
+        self.embedding_dim = self.index.d
+        
+        print(f"   ✅ Índice: {self.index.ntotal} vectores")
+        print(f"   ✅ Metadata: {len(self.metadata)} entries")
+        
+        # Config opcional
         self.config = {}
         if config_path and config_path.exists():
             with open(config_path) as f:
                 self.config = json.load(f)
         
-        self.embedding_dim = self.index.d
-        print(f"   ✅ Dimensión embeddings: {self.embedding_dim}")
+        # Taxonomy normalizer
+        self.enable_normalization = enable_taxonomy_normalization
+        if self.enable_normalization:
+            self.taxonomy_normalizer = TaxonomyNormalizer()
+            coverage = self._validate_coverage()
+            print(f"   ✅ Taxonomy normalizer: {coverage['coverage_percent']:.1f}% coverage")
+            
+            if coverage['unmapped_samples'] > 0:
+                print(f"   ⚠️  {coverage['unmapped_samples']} samples sin mapeo")
+        else:
+            self.taxonomy_normalizer = None
+            print(f"   ℹ️  Taxonomy normalizer desactivado")
+    
+    def _validate_coverage(self) -> Dict:
+        """Valida cobertura taxonómica del índice"""
+        if not self.taxonomy_normalizer:
+            return {}
+        
+        labels = []
+        for m in self.metadata:
+            label = m.get('dominant_type') or m.get('damage_type') or 'unknown'
+            labels.append(label)
+            
+            # Si es cluster, añadir todos
+            if 'damage_types' in m:
+                labels.extend(m['damage_types'])
+        
+        return self.taxonomy_normalizer.get_coverage_stats(labels)
     
     def search(
         self,
         query_embedding: np.ndarray,
         k: int = 5,
-        filters: Optional[Dict] = None
+        filters: Optional[Dict] = None,
+        return_normalized: bool = True
     ) -> List[SearchResult]:
         """
-        Búsqueda de similitud en el índice
+        Búsqueda con normalización automática de labels
+        
+        Args:
+            query_embedding: Vector de consulta
+            k: Número de resultados
+            filters: Filtros opcionales
+            return_normalized: Retornar labels normalizados
         """
-        # Asegurar shape correcto
+        # Preparar query
         if query_embedding.ndim == 1:
             query_embedding = query_embedding.reshape(1, -1)
-        
         query_embedding = query_embedding.astype('float32')
         
-        # Búsqueda en FAISS
+        # Búsqueda FAISS
         k_search = k * 5 if filters else k
         k_search = min(k_search, self.index.ntotal)
         
@@ -87,22 +118,43 @@ class DamageRAGRetriever:
                 continue
             
             meta = self.metadata[idx]
+            train_label = meta.get('dominant_type') or meta.get('damage_type') or 'unknown'
             
-            # Aplicar filtros si existen
-            if filters:
-                if not self._apply_filters(meta, filters):
-                    continue
+            # Normalizar label
+            if return_normalized and self.taxonomy_normalizer:
+                norm = self.taxonomy_normalizer.normalize(train_label)
+                benchmark_label = norm['benchmark_label']
+                confidence = norm['confidence']
+            else:
+                benchmark_label = train_label
+                confidence = 1.0
             
-            # FIX: Usar .get() para campos que pueden variar
+            # Aplicar filtros
+            if filters and not self._apply_filters(meta, filters, benchmark_label):
+                continue
+            
+            # Todos los damage types (si es cluster)
+            all_types = []
+            if 'damage_types' in meta:
+                all_types = meta['damage_types']
+                if return_normalized and self.taxonomy_normalizer:
+                    all_types = [
+                        self.taxonomy_normalizer.normalize(t)['benchmark_label']
+                        for t in all_types
+                    ]
+            
             result = SearchResult(
                 index=int(idx),
                 distance=float(dist),
                 crop_path=meta.get('crop_path', ''),
-                damage_type=meta.get('dominant_type', meta.get('damage_type', 'unknown')),
+                damage_type=benchmark_label,
+                damage_type_original=train_label,
+                damage_type_confidence=confidence,
                 image_path=meta.get('source_image', meta.get('image_path', '')),
                 bbox=meta.get('cluster_bbox', meta.get('bbox', [])),
                 spatial_zone=meta.get('spatial_zone', 'unknown'),
-                metadata=meta
+                metadata=meta,
+                all_damage_types=all_types
             )
             
             results.append(result)
@@ -112,85 +164,76 @@ class DamageRAGRetriever:
         
         return results
     
-    def _apply_filters(self, meta: Dict, filters: Dict) -> bool:
+    def _apply_filters(self, meta: Dict, filters: Dict, norm_label: str = None) -> bool:
         """Aplica filtros a un resultado"""
-        
-        # Filtro por tipo de daño
+        # Filtro por tipo
         if 'damage_type' in filters:
-            allowed_types = filters['damage_type']
-            if isinstance(allowed_types, str):
-                allowed_types = [allowed_types]
+            allowed = filters['damage_type']
+            if isinstance(allowed, str):
+                allowed = [allowed]
             
-            # FIX: Buscar en dominant_type o damage_type
-            damage_type = meta.get('dominant_type', meta.get('damage_type', 'unknown'))
-            if damage_type not in allowed_types:
+            if norm_label and norm_label not in allowed:
                 return False
         
-        # Filtro por zona espacial
+        # Filtro por zona
         if 'spatial_zone' in filters:
-            allowed_zones = filters['spatial_zone']
-            if isinstance(allowed_zones, str):
-                allowed_zones = [allowed_zones]
-            if meta.get('spatial_zone', 'unknown') not in allowed_zones:
-                return False
-        
-        # Filtro por tamaño relativo
-        if 'size_category' in filters:
-            allowed_sizes = filters['size_category']
-            if isinstance(allowed_sizes, str):
-                allowed_sizes = [allowed_sizes]
-            if meta.get('relative_size', meta.get('size_category', 'unknown')) not in allowed_sizes:
+            allowed = filters['spatial_zone']
+            if isinstance(allowed, str):
+                allowed = [allowed]
+            if meta.get('spatial_zone', 'unknown') not in allowed:
                 return False
         
         return True
     
-    def get_similar_damages(
-        self,
-        query_embedding: np.ndarray,
-        damage_type: Optional[str] = None,
-        k: int = 5
-    ) -> List[SearchResult]:
-        """
-        Wrapper conveniente para búsqueda con filtro de tipo de daño
-        """
-        filters = {'damage_type': damage_type} if damage_type else None
-        return self.search(query_embedding, k=k, filters=filters)
-    
     def build_rag_context(
         self,
         results: List[SearchResult],
-        max_examples: int = 3
+        max_examples: int = 3,
+        include_confidence: bool = False
     ) -> str:
-        """
-        Construye contexto para el prompt RAG
-        
-        Args:
-            results: Lista de SearchResult
-            max_examples: Número máximo de ejemplos a incluir
-        
-        Returns:
-            String con contexto formateado
-        """
+        """Construye contexto RAG con labels normalizados"""
         if not results:
-            return "No se encontraron ejemplos similares en la base de datos."
+            return "No similar examples found."
         
-        context_parts = [
-            "## Ejemplos Similares de la Base de Datos:\n"
-        ]
+        lines = ["## 🔍 Similar Verified Cases:\n"]
         
-        for i, result in enumerate(results[:max_examples], 1):
-            context_parts.append(f"\n### Ejemplo {i}:")
-            context_parts.append(f"- **Tipo de daño**: {result.damage_type.replace('_', ' ')}")
-            context_parts.append(f"- **Zona espacial**: {result.spatial_zone}")
-            context_parts.append(f"- **Similitud**: {1 - result.distance:.2%}")
-            context_parts.append(f"- **Imagen**: {Path(result.image_path).name}")
+        for i, r in enumerate(results[:max_examples], 1):
+            lines.append(f"\n### Example {i}:")
+            lines.append(f"- **Damage Type**: {r.damage_type}")
+            lines.append(f"- **Vehicle Area**: {self._format_zone(r.spatial_zone)}")
+            lines.append(f"- **Similarity**: {(1 - r.distance) * 100:.1f}%")
             
-            # Info adicional del metadata
-            if 'size_category' in result.metadata:
-                context_parts.append(f"- **Tamaño**: {result.metadata['size_category']}")
+            # Indicador de confianza (opcional)
+            if include_confidence and r.damage_type_confidence < 0.95:
+                lines.append(
+                    f"- **Note**: Approximate match (original: {r.damage_type_original})"
+                )
             
-            if 'edge_defect' in result.metadata:
-                edge_status = "Sí" if result.metadata['edge_defect'] else "No"
-                context_parts.append(f"- **En borde**: {edge_status}")
+            # Cluster con múltiples tipos
+            if r.all_damage_types and len(r.all_damage_types) > 1:
+                types = ", ".join(set(r.all_damage_types))
+                lines.append(f"- **Additional damages**: {types}")
         
-        return "\n".join(context_parts)
+        return "\n".join(lines)
+    
+    def _format_zone(self, zone: str) -> str:
+        """Formatea zonas espaciales"""
+        zones = {
+            "top_left": "Upper left", "top_center": "Upper center", "top_right": "Upper right",
+            "middle_left": "Left side", "middle_center": "Center", "middle_right": "Right side",
+            "bottom_left": "Lower left", "bottom_center": "Lower center", "bottom_right": "Lower right"
+        }
+        return zones.get(zone, zone)
+    
+    def get_stats(self) -> Dict:
+        """Estadísticas del índice"""
+        stats = {
+            'n_vectors': self.index.ntotal,
+            'embedding_dim': self.embedding_dim,
+            'normalization_enabled': self.enable_normalization
+        }
+        
+        if self.enable_normalization:
+            stats['taxonomy_coverage'] = self._validate_coverage()
+        
+        return stats

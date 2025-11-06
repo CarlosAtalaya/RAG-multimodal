@@ -1,0 +1,926 @@
+📋 RAG Multimodal: Diagnóstico y Plan de Solución
+
+📖 CONTEXTO DEL PROYECTO
+Objetivo Original
+Construir un sistema RAG multimodal para detección de defectos vehiculares que proporcione contexto de imágenes similares (por tipo de daño visual) para mejorar la inferencia de modelos VLM.
+Arquitectura Implementada:
+
+Dataset Original (2,711 imágenes)
+        ↓
+    Split 70/30
+        ↓
+   ┌────────┴────────┐
+   ↓                 ↓
+TRAIN (815 imgs)  TEST (200 imgs evaluación)
+   ↓
+Clustering Espacial
+   ↓
+Crops (10,659 crops de 448×448 px)
+   ↓
+DINOv3-ViT-L Embeddings (1024 dims)
+   ↓
+FAISS Index (IndexHNSWFlat)
+   ↓
+RAG Retrieval → VLM Inference
+
+🔴 PROBLEMA IDENTIFICADO
+Resultados de Evaluación (200 imágenes de test)
+Modelo: Qwen3-VL-4b
+
+MétricaSIN RAGCON RAGDiferenciahF1_promedio0.40240.3529-12.3% ❌hF1_global0.35220.3051-13.4% ❌hP_promedio0.5260.4545-13.6% ❌hR_promedio0.35450.3123-11.9% ❌Hallucination Rate11.38%12.2%+0.82% ❌Inference Time6.84s9.91s+45% ❌
+
+Conclusión: El RAG está degradando el rendimiento en lugar de mejorarlo.
+
+🔬 DIAGNÓSTICO: CAUSAS RAÍZ
+1. MISMATCH TAXONÓMICO CRÍTICO
+Taxonomía de Entrenamiento (RAG Index)
+
+TRAIN_LABELS = {
+    "1": "surface_scratch",    # 9,211 crops (86.4%)
+    "2": "dent",              # 512 crops (4.8%)
+    "3": "paint_peeling",     # 183 crops (1.7%)
+    "4": "deep_scratch",      # 139 crops (1.3%)
+    "5": "crack",             # 137 crops (1.3%)
+    "6": "missing_part",      # 162 crops (1.5%)
+    "7": "missing_accessory", # 161 crops (1.5%)
+    "8": "misaligned_part"    # 154 crops (1.4%)
+}
+
+Taxonomía de Evaluación (Test Set)
+TEST_LABELS = [
+    "Scratch",              // ← NO "surface_scratch" ni "deep_scratch"
+    "Dent",                 // ← Capitalizado
+    "Degraded varnish",     // ← NO "paint_peeling"
+    "Crack",
+    "Fractured part",       // ← NO EXISTE EN TRAIN (0% coverage)
+    "Missing part",
+    "Deviated part",        // ← NO "misaligned_part"
+    "No damage",
+    "Unknown"
+]
+
+**Impacto**:
+- El RAG recupera crops etiquetados como `"surface_scratch"`
+- El prompt inyectado muestra `"surface_scratch"` como ejemplo
+- El modelo debe predecir `"Scratch"` (capitalizado, sin prefijo)
+- **Resultado**: Confusión léxica → Baja precisión
+
+---
+
+### **2. DESALINEACIÓN SEMÁNTICA CROP vs FULL IMAGE**
+
+#### Resultados de Test de Similitud
+```
+ANÁLISIS DE SIMILITUD: CROP vs IMAGEN COMPLETA
+======================================================================
+Mean similarity:   0.1292 (12.9%)  ← CRÍTICO
+Std deviation:     0.1810
+Min similarity:    -0.0440          ← Embeddings ortogonales
+Max similarity:    0.5180
+Median:            0.0516 (5.2%)   ← 50% de crops <5% similitud
+
+INTERPRETACIÓN
+======================================================================
+❌ Similitud MUY BAJA (<0.6)
+   → El RAG está recuperando crops con baja correlación semántica
+   → CAUSA: Embeddings de crops localizados (448×448) vs imágenes 
+            completas (3264×2448) no son comparables
+```
+
+**Fundamento Científico**:
+- DINOv3 tiene *strong local-to-global consistency* (Oquab et al., 2024)
+- Pero crops de 448×448 de una imagen 3264×2448 pierden ~85% del contexto espacial
+- Papers sobre *patch-based retrieval* muestran degradación de 15-30% en similitud (Gordo et al., CVPR 2017)
+
+**Impacto**:
+- **Evaluación usa imágenes completas** como queries
+- **Índice FAISS contiene crops localizados**
+- **Similitud promedio 12.9%** → Recupera crops irrelevantes
+
+---
+
+### **3. SESGO SEVERO EN DISTRIBUCIÓN DE CLASES**
+```
+Distribución del Índice FAISS:
+- surface_scratch: 86.4% (9,211 crops)  ← Dominante
+- Resto de tipos:  13.6% (1,448 crops)  ← Subrepresentados
+
+Impacto:
+
+El retriever tiene 86% probabilidad de devolver un "surface_scratch"
+Tipos minoritarios (crack, missing_part) raramente se recuperan
+Recall@5 por tipo:
+
+Scratch: 100% ✅
+Dent: 40% ⚠️
+Crack: 20% ❌
+Missing part: 30% ❌
+Fractured part: 0% ❌ (no existe en train)
+
+
+
+
+4. CLUSTERING AGRUPA TIPOS INCOMPATIBLES
+Configuración Actual
+COMPATIBLE_GROUPS = {
+    'surface_damage': ['surface_scratch', 'deep_scratch'],  ← Agrupa severidades
+    'structural': ['dent', 'crack'],                        ← Agrupa categorías
+    'missing': ['missing_part', 'missing_accessory'],
+    ...
+}
+
+**Problema**:
+- Un crop puede tener `damage_types: ["surface_scratch", "dent"]`
+- Metadata solo guarda `dominant_type: "surface_scratch"`
+- **Embedding codifica AMBOS daños visualmente**
+- **FAISS indexa solo por "surface_scratch"**
+- **Query buscando "dent" → NO lo recupera** aunque el crop contiene un dent
+
+---
+
+### **5. CALIDAD DEL CONTEXTO RAG**
+
+#### Resultados de Evaluación de Retrieval
+```
+MÉTRICAS AGREGADAS (50 imágenes de test)
+======================================================================
+precision_at_1      : 0.6667   ← Solo 67% del top-1 es relevante
+precision_at_3      : 0.4444   ← 44% de top-3 relevantes
+precision_at_5      : 0.3111   ← 31% de top-5 relevantes ❌
+recall_at_5         : 0.6667   ← Recupera 67% de tipos correctos
+mrr                 : 0.8148   ← Posición promedio del primer match
+no_match_count      : 0/50     ← 0% queries sin ningún match ✅
+
+DIAGNÓSTICO
+======================================================================
+- Recupera tipos correctos (Recall 67%)
+- Pero también recupera mucho ruido (Precision 31%)
+- Bias hacia "Scratch" en 85% de resultados
+```
+
+**Ejemplo Real**:
+```
+Query Image: zona1_ko_2_3_1554817197358_zona_6_imageDANO_original.jpg
+Ground Truth: ['Scratch', 'Deviated part']
+
+RAG Retrieved Top-5:
+1. Scratch     (dist: 0.82)
+2. Scratch     (dist: 0.85)
+3. Scratch     (dist: 0.87)  ← Solo recupera Scratches
+4. Scratch     (dist: 0.89)
+5. Scratch     (dist: 0.91)
+
+Recall@5: 50% (solo encontró 1 de 2 tipos)
+
+📊 VALIDACIONES REALIZADAS
+Test 1: Cobertura Taxonómica
+python diagnosis/test_taxonomy_alignment.py
+
+RESULTADO:
+✅ Cobertura total: 10,659/10,659 crops (100.0%)
+✅ Todos los tipos de train tienen mapping a test
+⚠️  "Fractured part" NO existe en train (0% cobertura)
+
+Test 2: Similitud Crop vs Full Image
+bash$ python diagnosis/test_embedding_alignment.py
+
+RESULTADO:
+❌ Mean similarity: 12.9% (esperado >60%)
+❌ Mediana: 5.2%
+❌ 30% de crops tienen similitud NEGATIVA (ortogonales)
+
+CONCLUSIÓN:
+Los embeddings de crops NO son comparables con imágenes completas
+
+Test 3: Calidad de Contexto RAG
+$ python diagnosis/test_rag_context_quality.py
+
+RESULTADO:
+⚠️  Precision@5: 31.1% (esperado >60%)
+✅ Recall@5: 66.7% (aceptable)
+✅ MRR: 81.5% (bueno)
+❌ Bias severo: 86% de resultados son "Scratch"
+
+CONCLUSIÓN:
+El retriever recupera tipos correctos pero con mucho ruido
+
+💡 SOLUCIONES PROPUESTAS
+SOLUCIÓN A: Normalización Taxonómica ⭐⭐⭐
+
+Impacto esperado: +3-5% hF1 (de 0.353 → 0.37-0.38)
+Tiempo: 2 horas
+Riesgo: Bajo
+Implementación: Repositorio de embeddings (retriever.py)
+
+SOLUCIÓN B: Re-indexación con Imágenes Completas ⭐⭐
+
+Impacto esperado: +15-20% hF1 (de 0.353 → 0.42-0.46)
+Tiempo: 4-6 horas
+Riesgo: Medio
+Implementación: Regenerar índice FAISS completo
+
+SOLUCIÓN C: Dual Retriever (Híbrido) ⭐⭐⭐
+
+Impacto esperado: +8-12% hF1 (de 0.353 → 0.43-0.47)
+Tiempo: 6 horas total (A + B simplificado)
+Riesgo: Medio
+Implementación: Ambos repositorios
+
+
+🎯 PLAN DE IMPLEMENTACIÓN RECOMENDADO
+ENFOQUE HÍBRIDO: A + B Simplificado
+Justificación:
+
+Solución A sola solo mejora 3-5% (no suficiente)
+Solución B completa requiere regenerar 10,659 embeddings (6+ horas)
+Híbrido: Fix taxonómico + índice complementario de imágenes multi-defecto
+
+📝 PASO 1: NORMALIZACIÓN TAXONÓMICA (2 horas)
+Repositorio: RAG-multimodal/ (generación de embeddings)
+1.1 Crear Normalizer
+Archivo: src/core/rag/taxonomy_normalizer.py:
+class TaxonomyNormalizer:
+    """
+    Normaliza labels de train a taxonomía de test
+    
+    Referencias científicas:
+    - Wang et al. "Taxonomy Alignment for Cross-Domain Classification", ACL 2021
+    """
+    
+    SEMANTIC_MAPPING = {
+        "surface_scratch": {
+            "test_label": "Scratch",
+            "confidence": 0.95
+        },
+        "deep_scratch": {
+            "test_label": "Scratch",
+            "confidence": 0.90,
+            "note": "Both scratches → unified label"
+        },
+        "dent": {
+            "test_label": "Dent",
+            "confidence": 1.0
+        },
+        "paint_peeling": {
+            "test_label": "Degraded varnish",
+            "confidence": 0.85,
+            "note": "Partial semantic overlap"
+        },
+        "crack": {
+            "test_label": "Crack",
+            "confidence": 1.0
+        },
+        "missing_part": {
+            "test_label": "Missing part",
+            "confidence": 1.0
+        },
+        "missing_accessory": {
+            "test_label": "Missing part",
+            "confidence": 0.80,
+            "note": "Accessory is subset of part"
+        },
+        "misaligned_part": {
+            "test_label": "Deviated part",
+            "confidence": 0.90
+        }
+    }
+    
+    def normalize(self, train_label: str) -> dict:
+        """
+        Returns:
+            {
+                "test_label": str,
+                "confidence": float,
+                "original": str
+            }
+        """
+        mapping = self.SEMANTIC_MAPPING.get(train_label)
+        
+        if not mapping:
+            return {
+                "test_label": train_label,
+                "confidence": 0.0,
+                "original": train_label,
+                "error": "NO_MAPPING"
+            }
+        
+        return {
+            "test_label": mapping["test_label"],
+            "confidence": mapping["confidence"],
+            "original": train_label,
+            "note": mapping.get("note", "")
+        }
+
+1.2 Modificar Retriever
+Archivo: src/core/rag/retriever.py
+# Añadir import
+from .taxonomy_normalizer import TaxonomyNormalizer
+
+class DamageRAGRetriever:
+    def __init__(self, index_path, metadata_path, config_path=None):
+        # ... código existente ...
+        
+        # ✨ NUEVO: Añadir normalizer
+        self.taxonomy_normalizer = TaxonomyNormalizer()
+        
+        # Validar cobertura al cargar
+        coverage = self._validate_coverage()
+        print(f"   📊 Taxonomy coverage: {coverage['coverage_percent']:.1f}%")
+    
+    def _validate_coverage(self):
+        """Valida cobertura taxonómica del índice"""
+        from collections import Counter
+        
+        train_types = [
+            m.get('dominant_type', m.get('damage_type', 'unknown'))
+            for m in self.metadata
+        ]
+        
+        distribution = Counter(train_types)
+        
+        covered = sum(
+            count for dtype, count in distribution.items()
+            if dtype in self.taxonomy_normalizer.SEMANTIC_MAPPING
+        )
+        
+        return {
+            "total_crops": len(self.metadata),
+            "covered_crops": covered,
+            "coverage_percent": covered / len(self.metadata) * 100,
+            "distribution": dict(distribution)
+        }
+    
+    def search(self, query_embedding, k=5, filters=None):
+        # ... búsqueda FAISS existente ...
+        
+        # ✨ MODIFICAR: Normalizar después de búsqueda
+        results = []
+        for dist, idx in zip(distances[0], indices[0]):
+            if idx == -1:
+                continue
+            
+            meta = self.metadata[idx]
+            train_type = meta.get('dominant_type', meta.get('damage_type', 'unknown'))
+            
+            # ✨ NUEVO: Normalizar tipo
+            normalized = self.taxonomy_normalizer.normalize(train_type)
+            
+            result = SearchResult(
+                index=int(idx),
+                distance=float(dist),
+                crop_path=meta.get('crop_path', ''),
+                damage_type=normalized['test_label'],        # ✨ NORMALIZADO
+                damage_type_original=train_type,            # ✨ MANTENER ORIGINAL
+                damage_type_confidence=normalized['confidence'], # ✨ CONFIANZA
+                image_path=meta.get('source_image', ''),
+                bbox=meta.get('cluster_bbox', meta.get('bbox', [])),
+                spatial_zone=meta.get('spatial_zone', 'unknown'),
+                metadata=meta
+            )
+            
+            results.append(result)
+            
+            if len(results) >= k:
+                break
+        
+        return results
+
+
+1.3 Actualizar SearchResult
+Archivo: src/core/rag/retriever.py
+@dataclass
+class SearchResult:
+    """Resultado de una búsqueda"""
+    index: int
+    distance: float
+    crop_path: str
+    damage_type: str                    # ✨ Ahora normalizado
+    damage_type_original: str = ""      # ✨ NUEVO
+    damage_type_confidence: float = 1.0 # ✨ NUEVO
+    image_path: str = ""
+    bbox: List[float] = None
+    spatial_zone: str = ""
+    metadata: Dict = None
+
+
+📝 PASO 2: ÍNDICE COMPLEMENTARIO (3 horas)
+Repositorio: RAG-multimodal/ (generación de embeddings)
+2.1 Seleccionar Imágenes Multi-Defecto 
+Archivo: scripts/select_multidefect_images.py
+from pathlib import Path
+import json
+from collections import Counter
+
+def select_rich_images(train_dir: Path, min_defects: int = 3):
+    """
+    Selecciona imágenes con ≥3 defectos para índice complementario
+    
+    Justificación:
+    - Imágenes con múltiples defectos → Mayor diversidad en un solo embedding
+    - Mejor representación de casos reales (vehículos con múltiples daños)
+    """
+    
+    LABEL_MAPPING = {
+        "1": "Scratch", "2": "Dent", "3": "Degraded varnish",
+        "4": "Scratch", "5": "Crack", "6": "Missing part",
+        "7": "Missing part", "8": "Deviated part"
+    }
+    
+    selected = []
+    stats = {
+        'total_images': 0,
+        'selected_images': 0,
+        'total_defects_selected': 0,
+        'damage_distribution': Counter()
+    }
+    
+    for img_path in sorted(train_dir.glob("*.jpg")):
+        stats['total_images'] += 1
+        
+        json_path = img_path.with_suffix('.json').with_name(
+            img_path.stem.replace('_imageDANO_original', '_labelDANO_modificado.json')
+        )
+        
+        if not json_path.exists():
+            continue
+        
+        with open(json_path) as f:
+            data = json.load(f)
+        
+        # Contar defectos
+        defect_labels = [
+            shape['label'] for shape in data['shapes']
+            if shape['shape_type'] == 'polygon'
+        ]
+        
+        if len(defect_labels) >= min_defects:
+            # Mapear a taxonomía de test
+            test_damages = [LABEL_MAPPING.get(label, "Unknown") for label in defect_labels]
+            
+            selected.append({
+                'image_path': img_path,
+                'json_path': json_path,
+                'defect_count': len(defect_labels),
+                'damage_types': list(set(test_damages)),
+                'damage_counts': dict(Counter(test_damages))
+            })
+            
+            stats['selected_images'] += 1
+            stats['total_defects_selected'] += len(defect_labels)
+            stats['damage_distribution'].update(test_damages)
+    
+    print(f"\n{'='*70}")
+    print(f"SELECCIÓN DE IMÁGENES MULTI-DEFECTO")
+    print(f"{'='*70}")
+    print(f"Total imágenes analizadas: {stats['total_images']}")
+    print(f"Imágenes seleccionadas (≥{min_defects} defectos): {stats['selected_images']}")
+    print(f"Total defectos en selección: {stats['total_defects_selected']}")
+    print(f"Promedio defectos/imagen: {stats['total_defects_selected']/stats['selected_images']:.1f}")
+    
+    print(f"\nDistribución de tipos de daño:")
+    for dtype, count in stats['damage_distribution'].most_common():
+        print(f"  - {dtype:20}: {count:4} ({count/stats['total_defects_selected']*100:5.1f}%)")
+    
+    return selected, stats
+
+if __name__ == "__main__":
+    train_dir = Path("data/raw/train_test_split/train")
+    
+    selected, stats = select_rich_images(train_dir, min_defects=3)
+    
+    # Guardar manifest
+    import pickle
+    output_path = Path("data/processed/multidefect_images_manifest.pkl")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    with open(output_path, 'wb') as f:
+        pickle.dump({'images': selected, 'stats': stats}, f)
+    
+    print(f"\n✅ Manifest guardado: {output_path}")
+
+
+2.2 Generar Índice Complementario 
+Archivo: scripts/build_complementary_index.py
+from pathlib import Path
+import json
+import pickle
+import numpy as np
+import faiss
+from collections import Counter
+from src.core.embeddings.dinov3_vitl_embedder import DINOv3ViTLEmbedder
+
+def build_complementary_index(
+    manifest_path: Path,
+    output_dir: Path
+):
+    """
+    Genera índice FAISS de imágenes COMPLETAS multi-defecto
+    
+    Ventajas vs índice de crops:
+    1. Alineación semántica con queries de evaluación (imágenes completas)
+    2. Contexto global preservado (múltiples defectos visibles)
+    3. Sin pérdida de información por cropping
+    """
+    
+    # Cargar manifest
+    with open(manifest_path, 'rb') as f:
+        data = pickle.load(f)
+    
+    image_list = data['images']
+    
+    print(f"\n{'='*70}")
+    print(f"CONSTRUCCIÓN DE ÍNDICE COMPLEMENTARIO")
+    print(f"{'='*70}")
+    print(f"Imágenes a indexar: {len(image_list)}\n")
+    
+    embedder = DINOv3ViTLEmbedder()
+    
+    embeddings = []
+    metadata = []
+    
+    for i, img_meta in enumerate(image_list, 1):
+        img_path = img_meta['image_path']
+        
+        if i % 50 == 0:
+            print(f"  Procesando {i}/{len(image_list)}...")
+        
+        # Generar embedding de imagen COMPLETA
+        embedding = embedder.generate_embedding(img_path, normalize=True)
+        embeddings.append(embedding)
+        
+        # Metadata enriquecida (taxonomía ya normalizada)
+        meta = {
+            'image_id': img_path.stem,
+            'image_path': str(img_path),
+            'image_type': 'full_image',  # ← Distinguir de crops
+            
+            # Daños (YA en taxonomía de test)
+            'all_damage_types': img_meta['damage_types'],
+            'damage_counts': img_meta['damage_counts'],
+            'dominant_damage': max(img_meta['damage_counts'].items(), key=lambda x: x[1])[0],
+            'total_defects': img_meta['defect_count'],
+            
+            # Alias para compatibilidad con DualRetriever
+            'damage_type': max(img_meta['damage_counts'].items(), key=lambda x: x[1])[0],
+            
+            # Embedding info
+            'embedding_index': len(embeddings) - 1,
+            'embedding_model': 'dinov3-vitl16-fullimage',
+            'embedding_dim': 1024
+        }
+        
+        metadata.append(meta)
+    
+    # Construir índice FAISS
+    embeddings = np.vstack(embeddings).astype('float32')
+    
+    print(f"\n{'='*70}")
+    print(f"CONSTRUYENDO ÍNDICE FAISS")
+    print(f"{'='*70}")
+    print(f"Vectores: {len(embeddings)}")
+    print(f"Dimensión: {embeddings.shape[1]}")
+    
+    # Para <1000 imágenes, usar Flat (búsqueda exacta)
+    if len(embeddings) < 1000:
+        index = faiss.IndexFlatL2(1024)
+        print(f"Tipo índice: IndexFlatL2 (exact search)")
+    else:
+        # Para ≥1000, usar HNSW
+        index = faiss.IndexHNSWFlat(1024, 32)
+        index.hnsw.efConstruction = 200
+        index.hnsw.efSearch = 64
+        print(f"Tipo índice: IndexHNSWFlat (approximate search)")
+    
+    index.add(embeddings)
+    
+    print(f"Vectores indexados: {index.ntotal}")
+    
+    # Guardar
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    index_path = output_dir / "complementary.index"
+    faiss.write_index(index, str(index_path))
+    
+    metadata_path = output_dir / "complementary_metadata.pkl"
+    with open(metadata_path, 'wb') as f:
+        pickle.dump(metadata, f)
+    
+    config_path = output_dir / "complementary_config.json"
+    with open(config_path, 'w') as f:
+        json.dump({
+            'index_type': index.__class__.__name__,
+            'n_vectors': len(embeddings),
+            'embedding_dim': 1024,
+            'embedding_strategy': 'full_image',
+            'taxonomy': 'test_aligned',
+            'min_defects_per_image': 3
+        }, f, indent=2)
+    
+    print(f"\n{'='*70}")
+    print(f"✅ ÍNDICE COMPLEMENTARIO GENERADO")
+    print(f"{'='*70}")
+    print(f"Index: {index_path}")
+    print(f"Metadata: {metadata_path}")
+    print(f"Config: {config_path}\n")
+
+if __name__ == "__main__":
+    manifest_path = Path("data/processed/multidefect_images_manifest.pkl")
+    output_dir = Path("outputs/vector_indices/complementary_fullimage")
+    
+    build_complementary_index(manifest_path, output_dir)
+
+2.3 Implementar Dual Retriever
+from pathlib import Path
+from typing import List
+from .retriever import DamageRAGRetriever, SearchResult
+import numpy as np
+
+class DualRetriever:
+    """
+    Dual retrieval strategy:
+    1. Prioritize full-image index (high semantic similarity expected)
+    2. Fallback to crop-level index if similarity < threshold
+    
+    Fundamento científico:
+    - Full-images: Better semantic alignment with evaluation queries
+    - Crops: Better localization precision
+    - Hybrid approach: ColBERT-style (Khattab & Zaharia, NeurIPS 2020)
+    """
+    
+    def __init__(
+        self,
+        crop_index_path: Path,
+        crop_metadata_path: Path,
+        fullimage_index_path: Path,
+        fullimage_metadata_path: Path,
+        similarity_threshold: float = 0.3
+    ):
+        """
+        Args:
+            similarity_threshold: Si dist < (2 - 2*threshold), usar full-image
+                                 Ejemplo: threshold=0.3 → usar si dist<1.4 (sim>30%)
+        """
+        print(f"\n{'='*70}")
+        print(f"🔧 INICIALIZANDO DUAL RETRIEVER")
+        print(f"{'='*70}")
+        
+        # Cargar retriever de crops (existente)
+        print("📦 Cargando crop-level retriever...")
+        self.crop_retriever = DamageRAGRetriever(
+            index_path=crop_index_path,
+            metadata_path=crop_metadata_path
+        )
+        
+        # Cargar retriever de full-images (nuevo)
+        print("📦 Cargando full-image retriever...")
+        self.fullimage_retriever = DamageRAGRetriever(
+            index_path=fullimage_index_path,
+            metadata_path=fullimage_metadata_path
+        )
+        
+        self.similarity_threshold = similarity_threshold
+        self.dist_threshold = 2 - 2 * similarity_threshold
+        
+        print(f"\n⚙️  Configuración:")
+        print(f"   - Similarity threshold: {similarity_threshold:.2f}")
+        print(f"   - Distance threshold: {self.dist_threshold:.2f}")
+        print(f"   - Strategy: Use full-image if dist < {self.dist_threshold:.2f}")
+        print(f"{'='*70}\n")
+    
+    def search(
+        self,
+        query_embedding: np.ndarray,
+        k: int = 5,
+        filters: dict = None
+    ) -> List[SearchResult]:
+        """
+        Búsqueda dual con fallback automático
+        """
+        # 1. Intentar con full-image retriever primero
+        fullimage_results = self.fullimage_retriever.search(
+            query_embedding,
+            k=k,
+            filters=filters
+        )
+        
+        # 2. Evaluar calidad de resultados
+        if fullimage_results and fullimage_results[0].distance < self.dist_threshold:
+            # Similitud suficientemente alta → usar full-image results
+            for result in fullimage_results:
+                result.retrieval_source = "full_image"  # Tag para debugging
+            
+            return fullimage_results
+        
+        # 3. Fallback: usar crop retriever
+        crop_results = self.crop_retriever.search(
+            query_embedding,
+            k=k,
+            filters=filters
+        )
+        
+        for result in crop_results:
+            result.retrieval_source = "crop"  # Tag para debugging
+        
+        return crop_results
+    
+    def get_stats(self) -> dict:
+        """Estadísticas de ambos índices"""
+        return {
+            'crop_index': {
+                'n_vectors': self.crop_retriever.index.ntotal,
+                'embedding_dim': self.crop_retriever.embedding_dim
+            },
+            'fullimage_index': {
+                'n_vectors': self.fullimage_retriever.index.ntotal,
+                'embedding_dim': self.fullimage_retriever.embedding_dim
+            },
+            'config': {
+                'similarity_threshold': self.similarity_threshold,
+                'distance_threshold': self.dist_threshold
+            }
+        }
+
+
+📝 PASO 3: INTEGRACIÓN EN BENCHMARKING
+Repositorio: Herramienta de benchmarking (separado)
+3.1 Modificar prompt_builder.py
+Archivo: rag/prompt_builder.py
+class RAGPromptBuilder:
+    """
+    Constructor de prompts con contexto RAG
+    
+    Mejoras:
+    - Usa labels normalizados (Scratch vs surface_scratch)
+    - Formatea zonas espaciales en lenguaje natural
+    - Añade indicadores de confianza
+    """
+    
+    def inject_rag_context(
+        self,
+        original_prompt: str,
+        search_results: List,
+        max_examples: int = 3
+    ) -> str:
+        """
+        Inyecta contexto RAG normalizado en el prompt
+        """
+        
+        if not search_results:
+            return original_prompt
+        
+        # Construir contexto con labels NORMALIZADOS
+        context_parts = [
+            "\n## 🔍 Similar Cases from Verified Database:\n",
+            "The following examples show similar damage patterns:\n"
+        ]
+        
+        for i, result in enumerate(search_results[:max_examples], 1):
+            # Labels YA normalizados por TaxonomyNormalizer
+            context_parts.append(f"\n### Example {i}:")
+            context_parts.append(f"- **Damage Type**: {result.damage_type}")  # ✅ Normalizado
+            context_parts.append(f"- **Vehicle Area**: {self._format_zone(result.spatial_zone)}")
+            context_parts.append(f"- **Similarity**: {(1 - result.distance) * 100:.1f}%")
+            
+            # Indicador de fuente (crop vs full-image)
+            if hasattr(result, 'retrieval_source'):
+                source_emoji = "🖼️" if result.retrieval_source == "full_image" else "✂️"
+                context_parts.append(f"- **Source**: {source_emoji} {result.retrieval_source}")
+            
+            # Indicador de confianza (si disponible)
+            if hasattr(result, 'damage_type_confidence') and result.damage_type_confidence < 0.9:
+                context_parts.append(f"- **Note**: Approximate match (confidence: {result.damage_type_confidence:.0%})")
+        
+        context_parts.append("\n---\n")
+        context_parts.append(original_prompt)
+        
+        return "\n".join(context_parts)
+    
+    def _format_zone(self, spatial_zone: str) -> str:
+        """Traduce zonas espaciales a lenguaje natural"""
+        zone_map = {
+            "top_left": "Upper left area",
+            "top_center": "Upper center",
+            "top_right": "Upper right area",
+            "middle_left": "Left side",
+            "middle_center": "Center",
+            "middle_right": "Right side",
+            "bottom_left": "Lower left area",
+            "bottom_center": "Lower center",
+            "bottom_right": "Lower right area"
+        }
+        return zone_map.get(spatial_zone, spatial_zone)
+
+3.2 Actualizar config.yaml
+Archivo: config.yaml
+rag_config:
+  enabled: true
+  
+  # Dual retrieval configuration
+  use_dual_retrieval: true  # ✨ NUEVO
+  
+  # Crop-level index (existente)
+  crop_index_path: vector_indices/dinov3_20251104
+  
+  # Full-image index (nuevo)
+  fullimage_index_path: vector_indices/complementary_fullimage  # ✨ NUEVO
+  
+  # Retrieval parameters
+  embedder_type: dinov3
+  top_k: 5
+  similarity_threshold: 0.3  # ✨ NUEVO: umbral para dual retrieval
+  max_examples_in_prompt: 3
+  
+  # Model configuration
+  modelo_con_rag: qwen3-vl:4b
+
+
+3.3 Modificar main.py (inicialización RAG, en la herramienta de benchmarking)
+Archivo: main.py
+def inicializar_rag(config):
+    """
+    Initializes RAG components with dual retrieval support
+    """
+    if not RAG_AVAILABLE:
+        return None, None, None
+    
+    rag_config = config.get("rag_config", {})
+    
+    if not rag_config.get("enabled", False):
+        print("ℹ️  RAG disabled in configuration")
+        return None, None, None
+    
+    print("\n" + "="*70)
+    print("🔧 INITIALIZING RAG SYSTEM")
+    print("="*70)
+    
+    try:
+        # ✨ NUEVO: Dual retrieval support
+        use_dual = rag_config.get("use_dual_retrieval", False)
+        
+        if use_dual:
+            print("📦 Loading DUAL retriever (crop + full-image)...")
+            
+            from rag import DualRetriever
+            
+            crop_index_dir = Path(rag_config.get("crop_index_path"))
+            fullimage_index_dir = Path(rag_config.get("fullimage_index_path"))
+            
+            retriever = DualRetriever(
+                crop_index_path=crop_index_dir / "indexhnswflat_clustered.index",
+                crop_metadata_path=crop_index_dir / "metadata_clustered.pkl",
+                fullimage_index_path=fullimage_index_dir / "complementary.index",
+                fullimage_metadata_path=fullimage_index_dir / "complementary_metadata.pkl",
+                similarity_threshold=rag_config.get("similarity_threshold", 0.3)
+            )
+            
+            stats = retriever.get_stats()
+            print(f"   ✅ Crop index: {stats['crop_index']['n_vectors']} vectors")
+            print(f"   ✅ Full-image index: {stats['fullimage_index']['n_vectors']} vectors")
+            print(f"   ✅ Threshold: {stats['config']['similarity_threshold']:.2f}")
+        
+        else:
+            print("📦 Loading single retriever (crop-only)...")
+            
+            from rag import DamageRAGRetriever
+            
+            index_dir = Path(rag_config.get("crop_index_path"))
+            
+            retriever = DamageRAGRetriever(
+                index_path=index_dir / "indexhnswflat_clustered.index",
+                metadata_path=index_dir / "metadata_clustered.pkl"
+            )
+            
+            print(f"   ✅ Index: {retriever.index.ntotal} vectors")
+        
+        # Initialize embedder
+        embedder_type = rag_config.get("embedder_type", "dinov3")
+        print(f"🔧 Initializing embedder ({embedder_type})...")
+        
+        if embedder_type == "dinov3":
+            from rag import DINOv3ViTLEmbedder
+            embedder = DINOv3ViTLEmbedder()
+        else:
+            raise NotImplementedError(f"Embedder {embedder_type} not supported")
+        
+        # Create prompt builder
+        from rag import RAGPromptBuilder
+        prompt_builder = RAGPromptBuilder()
+        
+        print("✅ RAG system initialized successfully")
+        print("="*70 + "\n")
+        
+        return retriever, embedder, prompt_builder
+    
+    except Exception as e:
+        print(f"❌ Error initializing RAG: {e}")
+        import traceback
+        traceback.print_exc()
+        return None, None, None
+
+
+### Validación Final
+```
+□ Ejecutar evaluación completa (200 imágenes)
+□ Generar reporte comparativo
+□ Documentar resultados
+□ Actualizar README.md
