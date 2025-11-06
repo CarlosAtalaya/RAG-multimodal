@@ -188,10 +188,9 @@ class EndToEndRAGEvaluator:
         rag_context: str
     ) -> str:
         """
-        Genera respuesta usando Ollama (reemplaza requests)
+        Genera respuesta usando Ollama
         """
         
-        # PROMPT (mismo que antes)
         prompt = f"""Eres un asistente experto en inspección de daños vehiculares.
 
     **Tu tarea**: Analizar la imagen del vehículo e identificar TODOS los daños visibles.
@@ -219,15 +218,13 @@ class EndToEndRAGEvaluator:
         "location": "hood_center",
         "severity": "moderate",
         "confidence": "high"
-        }},
-        ...
+        }}
     ],
     "summary": "Se detectaron X daños en total..."
     }}
     ```
     """
         
-        # ✨ NUEVO: Usar Ollama
         try:
             response = self.vlm_client.generate_with_retry(
                 prompt=prompt,
@@ -238,11 +235,24 @@ class EndToEndRAGEvaluator:
                 retry_delay=5.0
             )
             
+            # ✅ Validación adicional
+            if not response or response.startswith("Error:"):
+                print(f"⚠️  Respuesta vacía o error para {Path(image_path).name}")
+                return json.dumps({
+                    "damages": [],
+                    "summary": "No se pudo generar análisis",
+                    "error": response
+                })
+            
             return response
         
         except Exception as e:
-            print(f"❌ Error en generación Ollama: {e}")
-            return f"Error: {str(e)}"
+            print(f"❌ Error en generación: {e}")
+            return json.dumps({
+                "damages": [],
+                "summary": "Error en generación",
+                "error": str(e)
+            })
     
     def _calculate_recall(
         self,

@@ -42,7 +42,7 @@ class OllamaVLMClient:
                     options={
                         'num_predict': max_tokens,
                         'temperature': temperature,
-                        'num_ctx': 4096,
+                        'num_ctx': 8192,  # Contexto aumentado para visión
                     }
                 )
             else:
@@ -61,18 +61,41 @@ class OllamaVLMClient:
             if self.auto_cleanup:
                 self._clear_gpu_cache()
             
-            # ✨ CORREGIDO: Acceder al contenido correctamente
-            # response es un objeto ChatResponse, no un dict
-            if hasattr(response, 'message') and hasattr(response.message, 'content'):
-                return response.message.content
-            elif isinstance(response, dict):
-                return response.get('message', {}).get('content', '')
-            else:
-                return str(response)
+            # ✅ SOLUCIÓN: Manejar content y thinking
+            if hasattr(response, 'message'):
+                msg = response.message
+                
+                # Prioridad 1: content si existe y no está vacío
+                if hasattr(msg, 'content') and msg.content:
+                    return msg.content.strip()
+                
+                # Prioridad 2: thinking si content está vacío (caso VLM)
+                if hasattr(msg, 'thinking') and msg.thinking:
+                    print("ℹ️  Usando campo 'thinking' (comportamiento VLM)")
+                    return msg.thinking.strip()
+                
+                # Prioridad 3: convertir mensaje a dict
+                if isinstance(msg, dict):
+                    if msg.get('content'):
+                        return msg['content'].strip()
+                    if msg.get('thinking'):
+                        return msg['thinking'].strip()
+            
+            # Fallback para dict directo
+            if isinstance(response, dict):
+                if response.get('message', {}).get('content'):
+                    return response['message']['content'].strip()
+                if response.get('message', {}).get('thinking'):
+                    return response['message']['thinking'].strip()
+            
+            # Último recurso
+            return str(response)
         
         except Exception as e:
             self._clear_gpu_cache()
             print(f"❌ Error detallado: {e}")
+            import traceback
+            traceback.print_exc()
             raise RuntimeError(f"Error: {e}")
     
     def generate_with_retry(
