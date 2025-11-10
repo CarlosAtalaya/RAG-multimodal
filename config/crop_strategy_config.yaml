@@ -1,3 +1,5 @@
+# config/crop_strategy_config.yaml (ACTUALIZADO)
+
 # Factores de padding por tipo de daño (base)
 padding_factors:
   "1": 0.35  # surface_scratch - necesita más contexto
@@ -9,24 +11,65 @@ padding_factors:
   "7": 0.20  # missing_accessory
   "8": 0.35  # misaligned_part - necesita referencia
 
+# ✨ NUEVO: Mapeo de zonas del vehículo
+vehicle_zones:
+  "1": 
+    name: "front_left_fender"
+    description: "Front left fender"
+    area: "frontal"
+  "2":
+    name: "hood_center"
+    description: "Center hood"
+    area: "frontal"
+  "3":
+    name: "front_right_fender"
+    description: "Front right fender"
+    area: "frontal"
+  "4":
+    name: "rear_left_quarter"
+    description: "Rear left quarter panel"
+    area: "posterior"
+  "5":
+    name: "rear_bumper"
+    description: "Rear bumper"
+    area: "posterior"
+  "6":
+    name: "rear_right_quarter"
+    description: "Rear right quarter panel"
+    area: "posterior"
+  "7":
+    name: "driver_side_door"
+    description: "Driver side door (left)"
+    area: "lateral_left"
+  "8":
+    name: "driver_side_rocker"
+    description: "Driver side rocker panel"
+    area: "lateral_left"
+  "9":
+    name: "passenger_side_door"
+    description: "Passenger side door (right)"
+    area: "lateral_right"
+  "10":
+    name: "passenger_side_rocker"
+    description: "Passenger side rocker panel"
+    area: "lateral_right"
+
+
 # Configuración de crops
 roi_crops:
   target_size: [448, 448]
   padding_color: [114, 114, 114]  # Gris medio
   maintain_aspect: true
 
-# Umbrales (se ajustarán automáticamente basados en estadísticas)
-# Estos son valores iniciales muy permisivos
-min_bbox_area: 50      # Mínimo muy bajo (casi nunca se descarta)
-max_bbox_area: 500000  # Máximo muy alto (solo anomalías extremas)
+# Umbrales
+min_bbox_area: 50
+max_bbox_area: 500000
+edge_threshold: 0.15
 
-# Umbrales de posición espacial
-edge_threshold: 0.15  # Distancia al borde para considerar "edge defect"
-
-# Umbrales de tamaño relativo (% del área de la imagen)
+# Umbrales de tamaño relativo
 size_thresholds:
-  very_small: 0.005   # < 0.5% de la imagen
-  small: 0.02         # 0.5% - 2%
-  medium: 0.08        # 2% - 8%
-  large: 0.15         # 8% - 15%
-  very_large: 0.15    # > 15%
+  very_small: 0.005
+  small: 0.02
+  medium: 0.08
+  large: 0.15
+  very_large: 0.15

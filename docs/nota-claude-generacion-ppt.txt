@@ -1,0 +1,40 @@
+Hola voy a compartirte un proyecto con github de un desarrollo tecnico sobre cómo construir un rag multimodal para que un modelo vlm tenga el contexto de un embedding con un retrieve generado por un modelo con arquitectura dinov3 a partir de un dataset curado.
+
+
+
+El proyecto está terminado, ya he hecho evaluacion y pruebas sobre este retriever para  un rag multimodal sobre un conjunto de imagenes con una herramienta externa. Pero no he quedado del todo satisfecho, te comentaré con más detalle más adelante
+
+
+
+En el repositorio hay algunos documentos en formato .md que son clave para que tengas un mejor contexto, osn los siguientes:
+
+
+* RAG_MULTIMODAL_TECHNICAL_DESIGN: es el documento incial, fue el primer docuemnto que generé para tener un poco el estado del arte, referencias y cuáles eran los mejores paasos a seguir ppara comletar mi proyecto (no se ha seguido al completo debido a algunos cambios o decisiones para mejorar el retrieve, pero sirve muy bien para tener ese contexto incial).
+
+
+* POC_IMPLEMENTATION_PLAN: fue el docuemnto que generé para tener claros los pasos a seguir en la implementacion (está un poco mal actualizado por lo mismo que te he comentado en el anterior)
+
+
+* CLUSTERED_CROPS_TECHNICAL_JUSTIFICATION: este docuemnto es clave para entender cómo se llegó a tomar la decision de que generar crops clusterizados sobre el conjunto de datos seleccionado para generar el rag era una buena opción.
+
+
+El último flujo de trabajo que seguí para generar mi rag final ha sido el siguiente (en cuanto a ejecución de scripts, para que tengas el contexto de esos modulos o scripts en python y no otros que no me han servido mucho al final): 
+
+1) Ejecuté primero el modulo 01c_prepare_dataset_split_train_test.py para tener un dataset splitteado en train y test bien balanceado, teneindo en cuenta las etiquetas del dataset original.
+
+2) 02_generate_clustered_crops.py fue el segundo modulo a ejecutar para que me generase los crops clusterizados para tener en el numeor minimo de crops bajo unas condiciones la mayor información conglomerada para reducir tiempos de computo a la hora de generar el embedding. A su vez este modulo llama a otro módulo muy importante como el 
+
+clustered_crop_generator
+
+3) 03_generate_embeddings_dinov3.py: este fue el siguieinte modulo a ejecutar, se decidió a ultima hora que la mejor manera de generar el embedding era a través de esta arquitectura moderna (también se consideró CLIP que es una rquitectura comun para este tipo de proyectos, pero finalmente se desechó por no ser algo tan actual). Este modulo llama al dinov3_vitl_embedder.py, que es clave.
+
+4) 04_build_faiss_index.py:  este modulo me permitió generar los indices para hacer busquedas en el retrieve de similitud en funcion de cada imagen sobre la que se iterase.
+
+5) 06_evaluate_rag_end_to_end.py. Este modulo sirvió para hacer una evaluación rapida de cómo eran los resultados del rag completo, a su vez este modulo llama a modulos muy importantes como el retriever.py y el dinov3_vitl_embedder.py
+
+Otra modificación de última hora para que el retrieve tuviera un mejor contexto fue la de añadir una clase TaxonomyNormalizer la cual ayudó a que el rag tuviera mejor sintetizada la informacion o taxonomia de los formatos de las cadenas de texto para el rag multimodal.
+
+
+
+Con toda esta información que te he aportado de lo fundamental y los modulos y docuemntos que quiero que contextualices correctamente. 
+En la siguiente conversación te contaré un poco más en detalle un probemea que creo que puede estar ocurriendo y te diré (por intuición, sin haber hecho una búsqueda exhaustiva) cómo creo que podría ser bueno atacar este problema para encontrar una solución relacionada.

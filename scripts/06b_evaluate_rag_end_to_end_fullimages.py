@@ -1,49 +1,40 @@
 #!/usr/bin/env python3
-# scripts/07_evaluate_rag_end_to_end.py
+# scripts/06_evaluate_rag_end_to_end.py (ACTUALIZADO para Full Images)
 
 """
-🧪 EVALUACIÓN RAG END-TO-END
+🧪 EVALUACIÓN RAG END-TO-END - FULL IMAGES
 
-Evalúa el sistema RAG completo:
-1. Imágenes del TEST SET (nunca vistas durante training)
-2. Genera embedding de query on-the-fly
-3. Retrieval de crops similares en FAISS
-4. Genera respuesta con Qwen3VL usando contexto RAG
-5. Eval
-
-úa calidad de respuesta vs ground truth
-
-ESTO SÍ ES UNA EVALUACIÓN REAL DE RAG
+Mejoras:
+- Query y database en misma escala (full images)
+- Contexto RAG enriquecido con zonas
+- Métricas mejoradas
 """
 
 from pathlib import Path
 import json
 import sys
 import time
-import base64
+import numpy as np
 from typing import List, Dict, Tuple
 from dataclasses import dataclass, asdict
-import requests
-import numpy as np
-import gc, torch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.core.rag.retriever import DamageRAGRetriever
+from src.core.rag.retriever_fullimages import DamageRAGRetriever
 from src.core.embeddings.dinov3_vitl_embedder import DINOv3ViTLEmbedder
 from src.core.api.ollama_client import OllamaVLMClient
 
 
 @dataclass
 class RAGTestCase:
-    """Caso de test para evaluación RAG"""
+    """Caso de test mejorado"""
     image_id: str
     image_path: str
     ground_truth: Dict  # Tipos de daño reales
     
     # Generado durante evaluación
     query_embedding: np.ndarray = None
-    retrieved_crops: List[Dict] = None
+    retrieved_images: List[Dict] = None
     rag_context: str = ""
     generated_answer: str = ""
     
@@ -51,62 +42,54 @@ class RAGTestCase:
     retrieval_time_ms: float = 0.0
     generation_time_ms: float = 0.0
     recall_at_k: float = 0.0
-    answer_faithfulness: float = 0.0  # ¿La respuesta usa el contexto?
-    answer_correctness: float = 0.0   # ¿La respuesta es correcta?
 
 
 class EndToEndRAGEvaluator:
-    """
-    Evaluador RAG completo end-to-end
-    
-    Pipeline:
-    1. Carga test set (imágenes NO vistas)
-    2. Para cada imagen:
-       a. Genera embedding (DINOv3 o Qwen3VL)
-       b. Retrieval en FAISS → Top-k crops
-       c. Construye contexto RAG
-       d. Genera respuesta con Qwen3VL
-       e. Evalúa calidad
-    """
+    """Evaluador completo con full images"""
     
     def __init__(
         self,
         index_path: Path,
         metadata_path: Path,
         embedder_type: str = 'dinov3',
-        ollama_model: str = "qwen3-vl:4b"  # ← NUEVO
+        ollama_model: str = "qwen3-vl:4b"
     ):
         print(f"\n{'='*70}")
-        print(f"🚀 INICIALIZANDO EVALUADOR RAG END-TO-END (OLLAMA)")
+        print(f"🚀 EVALUADOR RAG END-TO-END (FULL IMAGES)")
         print(f"{'='*70}\n")
         
-        # Cargar retriever
+        # Retriever
         print("📦 Cargando retriever...")
         self.retriever = DamageRAGRetriever(
             index_path=index_path,
             metadata_path=metadata_path
         )
         
-        # Inicializar embedder
-        print(f"🔧 Inicializando embedder ({embedder_type})...")
+        # Stats del índice
+        stats = self.retriever.get_stats()
+        print(f"   ✅ Índice: {stats['n_vectors']} imágenes completas")
+        print(f"   ✅ Total defectos: {stats['dataset_stats']['total_defects']}")
+        
+        # Embedder
+        print(f"\n🔧 Inicializando embedder ({embedder_type})...")
         if embedder_type == 'dinov3':
             self.embedder = DINOv3ViTLEmbedder()
         else:
             raise NotImplementedError(f"Embedder {embedder_type} no implementado")
         
-        # ✨ NUEVO: Cliente Ollama
-        print(f"🤖 Inicializando Ollama ({ollama_model})...")
+        # VLM client
+        print(f"\n🤖 Inicializando Ollama ({ollama_model})...")
         self.vlm_client = OllamaVLMClient(model=ollama_model)
         
-        print(f"✅ Inicialización completa\n")
+        print(f"\n✅ Inicialización completa\n")
     
     def load_test_set(self, test_dir: Path) -> List[RAGTestCase]:
-        """Carga casos de test del directorio test"""
+        """Carga casos de test"""
         print(f"📂 Cargando test set desde: {test_dir}\n")
         
         manifest_path = test_dir / "test_manifest.json"
         if not manifest_path.exists():
-            raise FileNotFoundError(f"No se encontró manifest: {manifest_path}")
+            raise FileNotFoundError(f"Manifest no encontrado: {manifest_path}")
         
         with open(manifest_path) as f:
             manifest = json.load(f)
@@ -128,14 +111,9 @@ class EndToEndRAGEvaluator:
         test_case: RAGTestCase,
         k: int = 5
     ) -> RAGTestCase:
-        """
-        Ejecuta pipeline RAG completo para un caso de test
+        """Pipeline RAG completo"""
         
-        Returns:
-            RAGTestCase con resultados poblados
-        """
-        
-        # 1. Generar embedding de la query image
+        # 1. Generar embedding de query (full image)
         start = time.time()
         query_embedding = self.embedder.generate_embedding(
             image_path=Path(test_case.image_path),
@@ -143,7 +121,7 @@ class EndToEndRAGEvaluator:
         )
         test_case.query_embedding = query_embedding
         
-        # 2. Retrieval en FAISS
+        # 2. Búsqueda FAISS
         search_results = self.retriever.search(
             query_embedding=query_embedding,
             k=k
@@ -153,20 +131,22 @@ class EndToEndRAGEvaluator:
         # 3. Construir contexto RAG
         test_case.rag_context = self.retriever.build_rag_context(
             results=search_results,
-            max_examples=3
+            max_examples=3,
+            include_spatial=True
         )
         
-        test_case.retrieved_crops = [
+        test_case.retrieved_images = [
             {
-                'crop_path': r.crop_path,
-                'damage_type': r.damage_type,
+                'image_path': r.image_path,
+                'damage_types': r.damage_types,
                 'distance': float(r.distance),
-                'spatial_zone': r.spatial_zone
+                'vehicle_zone': r.vehicle_zone,
+                'description': r.description
             }
             for r in search_results
         ]
         
-        # 4. Generar respuesta con Qwen3VL
+        # 4. Generar respuesta VLM
         start = time.time()
         test_case.generated_answer = self._generate_answer(
             image_path=test_case.image_path,
@@ -174,9 +154,9 @@ class EndToEndRAGEvaluator:
         )
         test_case.generation_time_ms = (time.time() - start) * 1000
         
-        # 5. Evaluar métricas
+        # 5. Calcular métricas
         test_case.recall_at_k = self._calculate_recall(
-            retrieved=[r['damage_type'] for r in test_case.retrieved_crops],
+            retrieved=[r['damage_types'] for r in test_case.retrieved_images],
             ground_truth=list(test_case.ground_truth.keys())
         )
         
@@ -187,43 +167,36 @@ class EndToEndRAGEvaluator:
         image_path: str,
         rag_context: str
     ) -> str:
-        """
-        Genera respuesta usando Ollama
-        """
+        """Genera respuesta con VLM"""
         
-        prompt = f"""Eres un asistente experto en inspección de daños vehiculares.
+        prompt = f"""You are an expert vehicle damage inspector. Analyze this image and identify ALL visible damages.
 
-    **Tu tarea**: Analizar la imagen del vehículo e identificar TODOS los daños visibles.
+**Context from similar verified cases in our database**:
+{rag_context}
 
-    **Para cada daño detectado, especifica**:
-    1. Tipo de daño (surface_scratch, dent, crack, deep_scratch, paint_peeling, missing_part, missing_accessory, misaligned_part)
-    2. Ubicación en el vehículo (ej: capó izquierdo, puerta trasera derecha)
-    3. Severidad estimada (leve, moderada, grave)
+**Your task**:
+1. Identify each damage type (scratch, dent, crack, etc.)
+2. Specify the location on the vehicle
+3. Estimate severity (mild, moderate, severe)
+4. Use the context above to inform your analysis
 
-    **Contexto de casos similares en nuestra base de datos**:
-    {rag_context}
-
-    **Instrucciones**:
-    - Usa el contexto de casos similares para fundamentar tu análisis
-    - Sé preciso y objetivo
-    - Si hay múltiples daños, lista todos
-    - Formato: JSON con lista de daños
-
-    **Formato de respuesta esperado**:
-    ```json
+**Response format** (JSON):
+```json
+{{
+  "damages": [
     {{
-    "damages": [
-        {{
-        "type": "surface_scratch",
-        "location": "hood_center",
-        "severity": "moderate",
-        "confidence": "high"
-        }}
-    ],
-    "summary": "Se detectaron X daños en total..."
+      "type": "surface_scratch",
+      "location": "hood_center",
+      "severity": "moderate",
+      "confidence": "high"
     }}
-    ```
-    """
+  ],
+  "summary": "Brief summary of findings"
+}}
+```
+
+**Important**: Base your analysis on BOTH the image AND the similar cases provided.
+"""
         
         try:
             response = self.vlm_client.generate_with_retry(
@@ -235,12 +208,10 @@ class EndToEndRAGEvaluator:
                 retry_delay=5.0
             )
             
-            # ✅ Validación adicional
             if not response or response.startswith("Error:"):
-                print(f"⚠️  Respuesta vacía o error para {Path(image_path).name}")
                 return json.dumps({
                     "damages": [],
-                    "summary": "No se pudo generar análisis",
+                    "summary": "Analysis failed",
                     "error": response
                 })
             
@@ -250,25 +221,27 @@ class EndToEndRAGEvaluator:
             print(f"❌ Error en generación: {e}")
             return json.dumps({
                 "damages": [],
-                "summary": "Error en generación",
+                "summary": "Error in generation",
                 "error": str(e)
             })
     
     def _calculate_recall(
         self,
-        retrieved: List[str],
+        retrieved: List[List[str]],
         ground_truth: List[str]
     ) -> float:
-        """
-        Calcula Recall@k: ¿Cuántos tipos de daño reales aparecen en retrieved?
-        """
+        """Calcula Recall@k"""
         if not ground_truth:
             return 0.0
         
-        retrieved_set = set(retrieved)
+        # Flatten retrieved types
+        retrieved_flat = set()
+        for types_list in retrieved:
+            retrieved_flat.update(types_list)
+        
         ground_truth_set = set(ground_truth)
         
-        hits = len(retrieved_set & ground_truth_set)
+        hits = len(retrieved_flat & ground_truth_set)
         return hits / len(ground_truth_set)
     
     def evaluate(
@@ -277,12 +250,7 @@ class EndToEndRAGEvaluator:
         k: int = 5,
         max_cases: int = None
     ) -> Dict:
-        """
-        Evalúa el sistema RAG con test set
-        
-        Returns:
-            Dict con métricas agregadas
-        """
+        """Evalúa el sistema RAG"""
         
         if max_cases:
             test_cases = test_cases[:max_cases]
@@ -308,7 +276,7 @@ class EndToEndRAGEvaluator:
                 print(f"✗ Error: {e}")
                 continue
         
-        # Calcular métricas agregadas
+        # Métricas agregadas
         metrics = self._aggregate_metrics(results)
         
         return {
@@ -339,73 +307,56 @@ class EndToEndRAGEvaluator:
 def main():
     import argparse
     
-    parser = argparse.ArgumentParser(
-        description='Evaluación RAG end-to-end con test set'
-    )
+    parser = argparse.ArgumentParser()
     parser.add_argument(
         '--test-set',
         type=Path,
         required=True,
-        help='Directorio con test set (output de 06_split_train_test.py)'
+        help='Directorio con test set'
     )
     parser.add_argument(
         '--index',
         type=Path,
-        default=Path("outputs/vector_indices/train_set_dinov3/indexhnswflat_clustered.index"),
-        help='Índice FAISS (generado del TRAIN set)'
+        default=Path("outputs/vector_indices/fullimages_dinov3/indexhnswflat_fullimages.index"),
+        help='Índice FAISS'
     )
     parser.add_argument(
         '--metadata',
         type=Path,
-        default=Path("outputs/vector_indices/train_set_dinov3/metadata_clustered.pkl"),
-        help='Metadata del índice'
-    )
-    parser.add_argument(
-        '--embedder',
-        type=str,
-        default='dinov3',
-        choices=['dinov3', 'qwen3vl'],
-        help='Tipo de embedder para queries'
+        default=Path("outputs/vector_indices/fullimages_dinov3/metadata_fullimages.pkl"),
+        help='Metadata'
     )
     parser.add_argument(
         '--k',
         type=int,
-        default=5,
-        help='Top-k retrieval'
+        default=5
     )
     parser.add_argument(
         '--max-cases',
         type=int,
-        default=None,
-        help='Máximo de casos a evaluar (None = todos)'
+        default=None
     )
     parser.add_argument(
         '--output',
         type=Path,
-        default=Path("outputs/rag_evaluation/rag_dinov3_train815"),
-        help='Directorio de salida'
+        default=Path("outputs/rag_evaluation_fullimages")
     )
     
     args = parser.parse_args()
     
-    # Verificar que existe el test set
+    # Verificar paths
     if not args.test_set.exists():
-        print(f"❌ Error: Test set no encontrado: {args.test_set}")
-        print("\n💡 Primero ejecuta:")
-        print("   python scripts/06_split_train_test.py")
+        print(f"❌ Test set no encontrado: {args.test_set}")
         return
     
-    # Inicializar evaluador
+    # Evaluar
     evaluator = EndToEndRAGEvaluator(
         index_path=args.index,
-        metadata_path=args.metadata,
-        embedder_type=args.embedder
+        metadata_path=args.metadata
     )
     
-    # Cargar test set
     test_cases = evaluator.load_test_set(args.test_set)
     
-    # Evaluar
     evaluation_results = evaluator.evaluate(
         test_cases=test_cases,
         k=args.k,
@@ -425,12 +376,11 @@ def main():
     print(f"Total time: {metrics['avg_total_time_ms']:.0f}ms")
     print(f"{'='*70}\n")
     
-    # Guardar resultados
+    # Guardar
     args.output.mkdir(parents=True, exist_ok=True)
     
-    results_path = args.output / "rag_evaluation_results.json"
+    results_path = args.output / "evaluation_results_fullimages.json"
     
-    # Convertir resultados a dict serializable
     results_dict = {
         'metrics': metrics,
         'test_cases': [
@@ -438,7 +388,7 @@ def main():
                 'image_id': r.image_id,
                 'image_path': r.image_path,
                 'ground_truth': r.ground_truth,
-                'retrieved_crops': r.retrieved_crops,
+                'retrieved_images': r.retrieved_images,
                 'generated_answer': r.generated_answer,
                 'recall_at_k': r.recall_at_k,
                 'retrieval_time_ms': r.retrieval_time_ms,
