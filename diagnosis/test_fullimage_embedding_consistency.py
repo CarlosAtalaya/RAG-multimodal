@@ -196,8 +196,8 @@ def test_test_train_retrieval():
     
     # Cargar retriever
     retriever = DamageRAGRetriever(
-        index_path=Path("outputs/vector_indices/fullimages_dinov3/indexhnswflat_fullimages.index"),
-        metadata_path=Path("outputs/vector_indices/fullimages_dinov3/metadata_fullimages.pkl")
+        index_path=Path("outputs/vector_indices/hybrid_dinov3_text/indexhnswflat_fullimages.index"),
+        metadata_path=Path("outputs/vector_indices/hybrid_dinov3_text/metadata_fullimages.pkl")
     )
     
     # Cargar test set
@@ -285,7 +285,7 @@ def test_embedding_distribution():
     print("TEST 4: DISTRIBUCIÓN DE EMBEDDINGS")
     print("="*70 + "\n")
     
-    embeddings_path = Path("data/processed/embeddings/fullimages_dinov3/embeddings_fullimages_dinov3.npy")
+    embeddings_path = Path("data/processed/embeddings/hybrid_dinov3_text/embeddings_hybrid_dinov3_text.npy")
     
     if not embeddings_path.exists():
         print(f"❌ Embeddings no encontrados")

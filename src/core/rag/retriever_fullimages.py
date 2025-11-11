@@ -1,13 +1,12 @@
-# src/core/rag/retriever.py (ACTUALIZADO para Full Images)
+# src/core/rag/retriever.py (VERSIÓN CORREGIDA - COMPLETA)
 
 """
-🔍 RAG RETRIEVER - FULL IMAGES + METADATA ENRIQUECIDA
+🔍 RAG RETRIEVER - FULL IMAGES + HYBRID EMBEDDINGS
 
-Mejoras vs versión anterior:
-- Contexto RAG con descripciones textuales
-- Info de zonas del vehículo
-- Distribución espacial de defectos
-- Filtros por zona y tipo mejorados
+Soporta:
+- Full images con metadata enriquecida
+- Hybrid embeddings (visual + text)
+- Filtros avanzados por zona y tipo
 """
 
 from pathlib import Path
@@ -15,10 +14,13 @@ import json
 import numpy as np
 import faiss
 import pickle
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, TYPE_CHECKING
 from dataclasses import dataclass, field
 
 from .taxonomy_normalizer import TaxonomyNormalizer
+
+if TYPE_CHECKING:
+    from src.core.embeddings.multimodal_embedder import MultimodalEmbedder
 
 
 @dataclass
@@ -55,7 +57,7 @@ class SearchResult:
 
 
 class DamageRAGRetriever:
-    """Retriever mejorado para Full Images"""
+    """Retriever unificado para Full Images y Hybrid Embeddings"""
     
     def __init__(
         self,
@@ -64,17 +66,23 @@ class DamageRAGRetriever:
         config_path: Path = None,
         enable_taxonomy_normalization: bool = True
     ):
-        print(f"🔧 Inicializando DamageRAGRetriever (Full Images)...")
+        print(f"🔧 Inicializando DamageRAGRetriever...")
         
         # Cargar índice y metadata
         self.index = faiss.read_index(str(index_path))
+        
         with open(metadata_path, 'rb') as f:
             self.metadata = pickle.load(f)
         
         self.embedding_dim = self.index.d
         
-        print(f"   ✅ Índice: {self.index.ntotal} vectores (full images)")
-        print(f"   ✅ Metadata: {len(self.metadata)} entries enriquecidas")
+        # Detectar tipo de embeddings
+        self.is_hybrid = self.embedding_dim > 1024  # Hybrid tiene 1408 dims
+        
+        embed_type = "hybrid (visual+text)" if self.is_hybrid else "visual only"
+        print(f"   ✅ Índice: {self.index.ntotal} vectores ({embed_type})")
+        print(f"   ✅ Dimensión: {self.embedding_dim}")
+        print(f"   ✅ Metadata: {len(self.metadata)} entries")
         
         # Config opcional
         self.config = {}
@@ -101,18 +109,27 @@ class DamageRAGRetriever:
         Búsqueda con metadata enriquecida
         
         Args:
-            query_embedding: Vector de consulta (1024 dims)
+            query_embedding: Vector de consulta (1024 o 1408 dims)
             k: Número de resultados
             filters: Filtros opcionales:
                 - damage_type: str o List[str]
                 - vehicle_zone: str o List[str]
+                - zone_area: str o List[str]
                 - min_defects: int
                 - max_defects: int
+            return_normalized: Normalizar tipos de daño a taxonomía benchmark
         """
         # Preparar query
         if query_embedding.ndim == 1:
             query_embedding = query_embedding.reshape(1, -1)
         query_embedding = query_embedding.astype('float32')
+        
+        # Verificar dimensión
+        if query_embedding.shape[1] != self.embedding_dim:
+            raise ValueError(
+                f"Query embedding dim ({query_embedding.shape[1]}) "
+                f"!= index dim ({self.embedding_dim})"
+            )
         
         # Búsqueda FAISS
         k_search = k * 3 if filters else k  # Más resultados para filtrar
@@ -164,6 +181,40 @@ class DamageRAGRetriever:
                 break
         
         return results
+    
+    def search_hybrid(
+        self,
+        query_image: Path,
+        query_metadata: Dict,
+        multimodal_embedder: 'MultimodalEmbedder',
+        k: int = 5,
+        filters: Optional[Dict] = None,
+        return_normalized: bool = True
+    ) -> List[SearchResult]:
+        """
+        Búsqueda usando embedding híbrido de query
+        
+        Args:
+            query_image: Path a imagen query
+            query_metadata: Metadata de la query (con defect_types, zone, etc.)
+            multimodal_embedder: Instancia de MultimodalEmbedder
+            k: Número de resultados
+            filters: Filtros opcionales
+        """
+        # Generar embedding híbrido de la query
+        query_embedding, _ = multimodal_embedder.generate_hybrid_embedding(
+            image_path=query_image,
+            metadata=query_metadata,
+            normalize=True
+        )
+        
+        # Búsqueda normal
+        return self.search(
+            query_embedding=query_embedding,
+            k=k,
+            filters=filters,
+            return_normalized=return_normalized
+        )
     
     def _apply_filters(
         self, 
@@ -218,10 +269,15 @@ class DamageRAGRetriever:
         self,
         results: List[SearchResult],
         max_examples: int = 3,
-        include_spatial: bool = True
+        include_spatial: bool = True  # ✅ PARÁMETRO AÑADIDO
     ) -> str:
         """
         Construye contexto RAG enriquecido con descripciones textuales
+        
+        Args:
+            results: Lista de SearchResult
+            max_examples: Número máximo de ejemplos a incluir
+            include_spatial: Incluir distribución espacial de defectos
         """
         if not results:
             return "No similar examples found in the database."
@@ -245,7 +301,7 @@ class DamageRAGRetriever:
             # Info de zona
             lines.append(f"**Vehicle zone**: {r.zone_description} ({r.zone_area})")
             
-            # Distribución espacial
+            # Distribución espacial (opcional)
             if include_spatial and r.spatial_distribution:
                 spatial_info = self._format_spatial_distribution(r.spatial_distribution)
                 lines.append(f"**Spatial distribution**: {spatial_info}")
@@ -255,7 +311,7 @@ class DamageRAGRetriever:
         return "\n".join(lines)
     
     def _format_spatial_distribution(self, spatial_dist: Dict[str, int]) -> str:
-        """Formatea distribución espacial en texto"""
+        """Formatea distribución espacial en texto legible"""
         parts = []
         for zone, count in sorted(spatial_dist.items(), key=lambda x: -x[1]):
             zone_formatted = zone.replace('_', ' ').title()
@@ -265,11 +321,17 @@ class DamageRAGRetriever:
         return ", ".join(parts) if parts else "distributed across image"
     
     def get_stats(self) -> Dict:
-        """Estadísticas del índice"""
+        """Estadísticas del índice y dataset"""
+        
+        # Detectar tipo de embeddings por dimensión
+        is_hybrid = self.embedding_dim > 1024
+        data_type = 'hybrid_embeddings' if is_hybrid else 'full_images'
+        
         stats = {
             'n_vectors': self.index.ntotal,
             'embedding_dim': self.embedding_dim,
-            'data_type': 'full_images',
+            'is_hybrid': is_hybrid,
+            'data_type': data_type,  # ✅ CAMPO AÑADIDO
             'normalization_enabled': self.enable_normalization
         }
         
@@ -288,7 +350,7 @@ class DamageRAGRetriever:
         stats['dataset_stats'] = {
             'total_images': len(self.metadata),
             'total_defects': total_defects,
-            'avg_defects_per_image': total_defects / len(self.metadata),
+            'avg_defects_per_image': total_defects / len(self.metadata) if self.metadata else 0,
             'damage_type_distribution': dict(Counter(all_types)),
             'zone_distribution': dict(Counter(all_zones))
         }
