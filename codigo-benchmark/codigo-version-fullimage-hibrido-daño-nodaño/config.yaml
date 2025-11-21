@@ -1,0 +1,71 @@
+
+directorio_imagenes: dataset_split_1
+
+# Gestores de modelos
+gestor: ollama
+
+ollama_config:
+  endpoint: http://localhost:11434/api/generate
+
+lm_studio_config:
+  endpoint: http://host.docker.internal:1234/v1/chat/completions
+
+vllm_config:
+  endpoint: http://host.docker.internal:8000/v1/chat/completions
+
+qwen_config:
+  endpoint: http://host.docker.internal:8001/qwen3/chat/completions
+
+openai_config:
+  api_key: sk-...
+
+gemini_config:
+  api_key: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+# Modelo a evaluar
+modelo_a_evaluar: qwen3-vl:8b-instruct-q8_0
+
+modelos_a_evaluar_en_lote:
+  - qwen3-vl:8b-instruct-q8_0
+
+# Hiperparámetros
+hiperparametros:
+  temperature: 0.0
+  top_k: 30
+
+# Archivos
+prompts_file: prompts.json
+output_file: resultados_evaluacion.json
+
+# Tareas
+tareas_a_ejecutar:
+  - Hallucination
+
+# ✨ RAG CONFIGURATION (SIMPLIFICADO)
+rag_config:
+  enabled: true
+  
+  # Normalización taxonómica
+  enable_taxonomy_normalization: true
+  
+  # Paths del índice
+  index_path: vector_indices/dinov3_hybrid_daño-nodaño_split2
+  index_filename: indexhnswflat_dano_nodano.index
+  metadata_filename: metadata_dano_nodano.pkl
+  config_filename: index_config_dano_nodano.json
+  
+  # Embedder híbrido (SIEMPRE)
+  visual_weight: 0.5
+  text_weight: 0.5
+  
+  # Retrieval
+  top_k: 5
+  max_examples_in_prompt: 3
+  
+  # Modelo que usará RAG
+  modelo_con_rag: qwen3-vl:8b-instruct-q8_0
+
+  # ✨ NUEVO: Gestión de ejemplos sin daño
+  allow_no_damage_examples: true  # Permitir ejemplos sin daño
+  min_damage_examples: 2          # Mínimo de ejemplos CON daño (si disponibles)
+  balance_damage_types: true      # Intentar balancear con/sin daño
