@@ -7,162 +7,205 @@ from typing import List, Dict, Tuple
 
 class ClusteredCropGeneratorOptimized:
     """
-    Generador de crops inteligente para la Fase 2 (MetaCLIP).
+    Generador de crops inteligente V2.
     
-    Diferencias vs versión anterior:
-    1. ELIMINADO: Padding con color gris (causaba artifacts).
-    2. NUEVO: Resize proporcional Lanczos4 solo si excede tamaño target.
-    3. NUEVO: Metadata extendida para estrategia multi-patch.
+    Características:
+    - NO RESIZE: Mantiene la resolución original (1:1).
+    - TAMAÑO FIJO: Todos los crops son de target_size x target_size.
+    - SMART TILING: Si un defecto es gigante, lo cubre con múltiples tiles.
     """
     
     def __init__(self, target_size: int = 336):
         self.target_size = target_size
-        # Margen mínimo alrededor del defecto (contexto)
-        self.context_margin = 0.20  # 20%
+        # Margen base alrededor del defecto (solo si cabe en un crop)
+        self.base_margin = 0.10
+        # Solapamiento mínimo entre tiles para defectos grandes (20%)
+        self.tile_overlap = 0.20 
 
     def generate_crops(self, image_path: Path, json_path: Path) -> List[Dict]:
         import json
         
-        # Cargar imagen y JSON
+        # 1. Cargar imagen
         image = cv2.imread(str(image_path))
-        if image is None:
-            return []
-        
+        if image is None: return []
         h_img, w_img = image.shape[:2]
         
-        with open(json_path) as f:
-            data = json.load(f)
-            
-        # 1. Extraer defectos
-        defects = self._extract_defects(data, w_img, h_img)
-        if not defects:
+        # 2. Cargar datos
+        try:
+            with open(json_path) as f:
+                data = json.load(f)
+        except Exception as e:
+            print(f"Error JSON {json_path}: {e}")
             return []
             
-        # 2. Clusterizar defectos cercanos (Lógica rescatada del script 02)
+        # 3. Extraer y Clusterizar
+        defects = self._extract_defects(data, w_img, h_img)
+        if not defects: return []
+            
         clusters = self._cluster_defects(defects)
-        
         crops_metadata = []
         
-        # 3. Generar crops optimizados
+        # 4. Generar Crops (1 o múltiples por cluster)
         for i, cluster in enumerate(clusters):
-            # Calcular bbox del cluster con margen
-            x1, y1, x2, y2 = self._get_cluster_bbox(cluster, w_img, h_img)
-            w, h = x2 - x1, y2 - y1
             
-            # Extraer crop "crudo" (sin procesar)
-            crop = image[y1:y2, x1:x2]
+            # Obtener lista de tiles que cubren este cluster
+            tiles = self._generate_tiles_for_cluster(image, cluster, w_img, h_img)
             
-            # Lógica de optimización para MetaCLIP
-            final_crop, scale_info = self._optimize_crop_for_metaclip(crop)
-            
-            crops_metadata.append({
-                'crop': final_crop,
-                'bbox_original': [x1, y1, x2, y2],
-                'defects': cluster,
-                'scale_info': scale_info, # Para saber si se hizo resize
-                'cluster_id': i
-            })
+            for j, tile_data in enumerate(tiles):
+                crops_metadata.append({
+                    'crop': tile_data['crop'],             # (336, 336, 3)
+                    'bbox_crop': tile_data['bbox'],        # Coordenadas del crop en la imagen original
+                    'defects': cluster,                    # Referencia a los defectos que cubre
+                    'is_tiled': tile_data['is_tiled'],     # Flag para saber si fue partido
+                    'cluster_id': i,
+                    'tile_id': j
+                })
             
         return crops_metadata
 
-    def _optimize_crop_for_metaclip(self, crop: np.ndarray) -> Tuple[np.ndarray, Dict]:
+    def _generate_tiles_for_cluster(self, image: np.ndarray, cluster: List[Dict], w_img: int, h_img: int) -> List[Dict]:
         """
-        Prepara el crop para MetaCLIP 2 sin introducir ruido artificial.
+        Decide si saca un solo crop centrado o hace tiling si el defecto es muy grande.
         """
-        h, w = crop.shape[:2]
-        
-        # Caso A: El crop es más pequeño o igual al target (448x448)
-        # Lo devolvemos tal cual. MetaCLIP hará el resize interno si hace falta,
-        # pero preferimos no inventar píxeles (no padding).
-        if w <= self.target_size and h <= self.target_size:
-            return crop, {'type': 'original', 'scale': 1.0}
-            
-        # Caso B: El crop es gigante (ej: todo el lateral del coche)
-        # Hacemos downscale proporcional suave para no perder contexto global.
-        scale = min(self.target_size / w, self.target_size / h)
-        new_w, new_h = int(w * scale), int(h * scale)
-        
-        resized_crop = cv2.resize(
-            crop, 
-            (new_w, new_h), 
-            interpolation=cv2.INTER_LANCZOS4 # Mejor calidad para downsampling
-        )
-        
-        return resized_crop, {'type': 'resized', 'scale': scale}
-
-    def _extract_defects(self, data: dict, w_img: int, h_img: int) -> List[Dict]:
-        """Extrae bboxes de los polígonos del JSON"""
-        defects = []
-        for shape in data.get('shapes', []):
-            if shape['shape_type'] != 'polygon' or shape['label'] == '9':
-                continue
-                
-            points = np.array(shape['points'])
-            x_min, y_min = points.min(axis=0)
-            x_max, y_max = points.max(axis=0)
-            
-            defects.append({
-                'label': shape['label'],
-                'bbox': [max(0, int(x_min)), max(0, int(y_min)), 
-                         min(w_img, int(x_max)), min(h_img, int(y_max))]
-            })
-        return defects
-
-    def _cluster_defects(self, defects: List[Dict]) -> List[List[Dict]]:
-        """
-        Algoritmo simple de agrupación por distancia.
-        Si dos defectos están cerca (<100px), van al mismo crop.
-        """
-        if not defects: return []
-        
-        # Implementación simplificada del clustering espacial
-        # En producción real, usarías la lógica O(n log n) del script 02
-        # Aquí usamos una heurística rápida para avanzar.
-        clusters = []
-        assigned = [False] * len(defects)
-        
-        for i in range(len(defects)):
-            if assigned[i]: continue
-            
-            current_cluster = [defects[i]]
-            assigned[i] = True
-            
-            ref_bbox = defects[i]['bbox']
-            center_ref = ((ref_bbox[0]+ref_bbox[2])/2, (ref_bbox[1]+ref_bbox[3])/2)
-            
-            for j in range(i+1, len(defects)):
-                if assigned[j]: continue
-                
-                tgt_bbox = defects[j]['bbox']
-                center_tgt = ((tgt_bbox[0]+tgt_bbox[2])/2, (tgt_bbox[1]+tgt_bbox[3])/2)
-                
-                # Distancia Euclídea
-                dist = np.sqrt((center_ref[0]-center_tgt[0])**2 + (center_ref[1]-center_tgt[1])**2)
-                
-                if dist < 100: # Threshold de proximidad
-                    current_cluster.append(defects[j])
-                    assigned[j] = True
-            
-            clusters.append(current_cluster)
-            
-        return clusters
-
-    def _get_cluster_bbox(self, cluster: List[Dict], w_img: int, h_img: int) -> List[int]:
-        """Calcula el bounding box que engloba todo el cluster + margen"""
+        # 1. BBox del cluster completo
         x1 = min(d['bbox'][0] for d in cluster)
         y1 = min(d['bbox'][1] for d in cluster)
         x2 = max(d['bbox'][2] for d in cluster)
         y2 = max(d['bbox'][3] for d in cluster)
         
-        w_box, h_box = x2 - x1, y2 - y1
+        w_cluster = x2 - x1
+        h_cluster = y2 - y1
         
-        # Aplicar margen de contexto
-        pad_x = int(w_box * self.context_margin)
-        pad_y = int(h_box * self.context_margin)
+        # Lista de coordenadas [x, y, w, h] para los crops
+        crop_coords = []
+        is_tiled = False
+
+        # CASO A: El cluster cabe en un solo crop (con un poco de margen)
+        # Verificamos si es más pequeño que el target
+        if w_cluster <= self.target_size and h_cluster <= self.target_size:
+            # Estrategia: CENTRAR
+            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+            
+            # Calcular esquinas top-left
+            sx = cx - (self.target_size // 2)
+            sy = cy - (self.target_size // 2)
+            
+            # Ajustar si se sale de la imagen (Shift)
+            sx = max(0, min(sx, w_img - self.target_size))
+            sy = max(0, min(sy, h_img - self.target_size))
+            
+            crop_coords.append((int(sx), int(sy)))
+            
+        else:
+            # CASO B: El cluster es GIGANTE -> TILING (Teselado)
+            # Generamos puntos de corte para X y para Y
+            is_tiled = True
+            
+            xs = self._get_tiling_coords(x1, x2, w_img)
+            ys = self._get_tiling_coords(y1, y2, h_img)
+            
+            # Producto cartesiano de coordenadas
+            for sy in ys:
+                for sx in xs:
+                    crop_coords.append((int(sx), int(sy)))
+
+        # Extraer los recortes reales
+        tiles = []
+        for sx, sy in crop_coords:
+            ex = sx + self.target_size
+            ey = sy + self.target_size
+            
+            # Asegurar límites (por si la imagen original es < 336px, caso raro)
+            if ex > w_img or ey > h_img:
+                continue 
+
+            crop = image[sy:ey, sx:ex]
+            
+            # Validación final de integridad
+            if crop.shape[:2] == (self.target_size, self.target_size):
+                tiles.append({
+                    'crop': crop,
+                    'bbox': [sx, sy, ex, ey],
+                    'is_tiled': is_tiled
+                })
+                
+        return tiles
+
+    def _get_tiling_coords(self, start: int, end: int, max_limit: int) -> List[int]:
+        """
+        Calcula las coordenadas de inicio para cubrir el rango [start, end]
+        con ventanas de tamaño fijo target_size.
+        """
+        length = end - start
         
-        return [
-            max(0, x1 - pad_x),
-            max(0, y1 - pad_y),
-            min(w_img, x2 + pad_x),
-            min(h_img, y2 + pad_y)
-        ]
+        # Si la dimensión cabe, intentamos centrarla en el rango disponible
+        # Pero si estamos en lógica de tiling, es porque al menos una dimensión falló.
+        # Aquí tratamos la dimensión 1D independientemente.
+        
+        if length <= self.target_size:
+            # Si en este eje cabe, centramos respecto al defecto
+            center = (start + end) // 2
+            s = center - (self.target_size // 2)
+            # Clamp
+            return [max(0, min(s, max_limit - self.target_size))]
+        
+        # Si NO cabe, generamos tiles
+        coords = []
+        cursor = start
+        
+        # Stride = tamaño - overlap
+        step = int(self.target_size * (1 - self.tile_overlap))
+        
+        # Avanzar poniendo tiles
+        while cursor + self.target_size < end:
+            # Clamp para no salirnos por la izquierda (0)
+            valid_start = max(0, cursor)
+            # Clamp para no salirnos por la derecha
+            if valid_start + self.target_size <= max_limit:
+                coords.append(valid_start)
+            cursor += step
+            
+        # IMPORTANTE: Añadir el último tile anclado al final del defecto
+        # Esto asegura que el borde derecho del defecto siempre sale completo
+        last_start = end - self.target_size
+        last_start = max(0, min(last_start, max_limit - self.target_size))
+        
+        if not coords or coords[-1] != last_start:
+            coords.append(last_start)
+            
+        return sorted(list(set(coords))) # Eliminar duplicados y ordenar
+
+    def _extract_defects(self, data: dict, w_img: int, h_img: int) -> List[Dict]:
+        defects = []
+        for shape in data.get('shapes', []):
+            if shape['shape_type'] != 'polygon' or shape['label'] == '9': continue
+            points = np.array(shape['points'])
+            x_min, y_min = points.min(axis=0)
+            x_max, y_max = points.max(axis=0)
+            defects.append({
+                'label': shape['label'],
+                'bbox': [max(0, int(x_min)), max(0, int(y_min)), min(w_img, int(x_max)), min(h_img, int(y_max))]
+            })
+        return defects
+
+    def _cluster_defects(self, defects: List[Dict]) -> List[List[Dict]]:
+        if not defects: return []
+        clusters = []
+        assigned = [False] * len(defects)
+        for i in range(len(defects)):
+            if assigned[i]: continue
+            current_cluster = [defects[i]]
+            assigned[i] = True
+            ref_bbox = defects[i]['bbox']
+            c_ref = ((ref_bbox[0]+ref_bbox[2])/2, (ref_bbox[1]+ref_bbox[3])/2)
+            
+            for j in range(i+1, len(defects)):
+                if assigned[j]: continue
+                tgt_bbox = defects[j]['bbox']
+                c_tgt = ((tgt_bbox[0]+tgt_bbox[2])/2, (tgt_bbox[1]+tgt_bbox[3])/2)
+                dist = np.sqrt((c_ref[0]-c_tgt[0])**2 + (c_ref[1]-c_tgt[1])**2)
+                if dist < 100:
+                    current_cluster.append(defects[j])
+                    assigned[j] = True
+            clusters.append(current_cluster)
+        return clusters

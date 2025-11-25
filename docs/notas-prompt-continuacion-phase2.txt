@@ -1,0 +1,78 @@
+📋 Prompt de Contexto para Fase 2: Generación de Contextos y Embeddings MetaCLIP
+Situación del Proyecto: Estamos migrando una arquitectura RAG Multimodal para detección de defectos vehiculares. Hemos completado la Fase 1 (Generación de Crops) siguiendo la propuesta de arquitectura docs/RAG_Multimodal_Architexture_Proposal_Clip.md.
+
+El objetivo actual es avanzar a la Fase 2 (Contextualización) y Fase 3 (Embeddings), utilizando MetaCLIP 2 (Unified 1024d) sobre un dataset balanceado (50% Daño / 50% Limpio).
+
+1. Estado Actual: Módulos Implementados (Fase 1)
+Se han construido y validado tres módulos clave que han generado el dataset de crops en data/processed/crops/balanced_optimized_v2 junto con un metadata_crops_phase1.json:
+
+scripts/phase1_generate_crops_optimized.py (Orquestador):
+
+Lógica de Diferenciación: Clasifica imágenes en Damaged o Clean basándose estrictamente en la existencia física del fichero _labelDANO_modificado.json asociado a la imagen, ignorando nomenclaturas ambiguas.
+
+Carga de Segmentación: Utiliza un fichero maestro poligonos.json para inyectar la silueta exacta del vehículo en el procesado de imágenes limpias.
+
+src/core/preprocessing/clustered_crop_generator_optimized.py (Para Imágenes con Daño):
+
+Estrategia: Smart Tiling & Context Expansion.
+
+Resolución: 336x336 px (Nativa para MetaCLIP/ViT-L).
+
+Lógica:
+
+Si el defecto cabe en 336px: Se centra y expande con contexto real (sin padding gris).
+
+Si el defecto es mayor a 336px: Se aplica tiling (mosaico) con solapamiento para cubrir el defecto sin hacer resize (preservando fidelidad 1:1 del píxel).
+
+Output Metadata: Incluye la lista exacta de defectos (defects) contenidos en ese crop específico.
+
+src/core/preprocessing/grid_crop_generator.py (Para Imágenes Limpias):
+
+Estrategia: Grid sobre máscara de polígono.
+
+Resolución: 336x336 px con 30% de overlap.
+
+Filtrado: Descarta crops que contienen mayoritariamente fondo negro (usando la máscara del poligonos.json), asegurando que solo se procesan texturas de vehículo válidas.
+
+2. Objetivos Inmediatos (Lo que tú debes implementar)
+Necesito que continúes con la implementación de la Fase 2: Generación de Contextos Ricos y la Fase 3: Embeddings Unificados.
+
+A. Generación de Contextos Textuales (phase2_generate_contexts.py) Debes crear un script que lea metadata_crops_phase1.json y enriquezca cada entrada con un campo text_description.
+
+Referencia Crítica: Debes adaptar la lógica de negocio que existía en scripts/03d_generate_hybrid_embeddings_fullimages_dano-nodano.py y src/core/embeddings/multimodal_embedder_v2.py, pero aplicada a nivel de crop.
+
+Reglas de Negocio para el Prompt Textual:
+
+Para Crops CON Daño:
+
+Usar la lista defects presente en la metadata del crop.
+
+Formato esperado: "{N} {tipo_daño} on {zona_vehículo} ({area}). Specific defects visible: {lista_defectos_crop}."
+
+Debes rescatar el mapeo de zonas y tipos de daño del config/crop_strategy_config.yaml anterior.
+
+Para Crops SIN Daño (Clean):
+
+Usar la información de vehicle_zone y grid_pos.
+
+Formato esperado: "Clean surface of {zona_vehículo} ({area}). No defects visible. Inspection grid section."
+
+Es vital mantener la semántica negativa ("no damage", "clean paint") para que MetaCLIP distinga bien en el espacio vectorial.
+
+B. Generación de Embeddings MetaCLIP (phase3_generate_metaclip_embeddings.py)
+
+Implementar la clase MetaCLIPUnifiedEmbedder propuesta en docs/RAG_Multimodal_Architexture_Proposal_Clip.md.
+
+Modelo: facebook/metaclip-h14-fullcc2.5b (o equivalente ViT-L/14@336px).
+
+Fusión: Implementar estrategia Average o Weighted de los embeddings de Imagen + Texto (ya alineados en el espacio de 1024d).
+
+Input Visual: Los crops de 336px generados en Fase 1 (sin necesidad de pre-procesado pesado, ya están listos).
+
+C. Construcción de Índice FAISS Unificado
+
+Unificar vectores de crops dañados y limpios en un solo índice IndexHNSWFlat.
+
+Asegurar que la metadata almacenada permita filtrado por has_damage (bool) y vehicle_zone.
+
+Nota Final: El éxito depende de que la descripción textual generada en el paso A sea altamente descriptiva y siga la taxonomía del proyecto, ya que MetaCLIP confía en esa alineación texto-imagen para el retrieval semántico.
