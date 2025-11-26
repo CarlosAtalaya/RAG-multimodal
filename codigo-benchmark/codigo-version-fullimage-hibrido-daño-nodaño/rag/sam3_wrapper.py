@@ -1,11 +1,13 @@
+# rag/sam3_wrapper.py
+
 import os
 import torch
 import numpy as np
 import cv2
 from PIL import Image
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Any
 
-# Imports de SAM3 (Tal cual los tienes en tu script funcional)
+# Gestión robusta de imports
 try:
     import sam3
     from sam3 import build_sam3_image_model
@@ -16,9 +18,14 @@ try:
     from sam3.eval.postprocessors import PostProcessImage
     SAM3_AVAILABLE = True
 except ImportError as e:
-    print(f"⚠️ Error crítico: Librería SAM3 no encontrada o incompleta: {e}")
+    print(f"⚠️ [SAM3] Error crítico de dependencias: {e}")
+    print("   Asegúrate de tener instalado: sam3, decord, torch, torchvision")
     SAM3_AVAILABLE = False
-
+    
+    # Definir Dummies para evitar NameError si fallan los imports
+    class Datapoint: pass
+    class SAMImage: pass
+    
 class SAM3Segmenter:
     """
     Wrapper profesional para SAM3.
@@ -26,32 +33,52 @@ class SAM3Segmenter:
     """
     def __init__(self, config: dict = None):
         if not SAM3_AVAILABLE:
-            raise ImportError("SAM3 no está disponible. Revisa los requirements.")
+            raise ImportError("La librería SAM3 o sus dependencias (como 'decord') no están instaladas.")
 
         self.config = config or {}
         
-        # Configuración hardcodeada basada en tu script exitoso
-        # Ajusta las rutas si cambian en tu entorno final
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        # IMPORTANTE: Forzado a CPU para dejar la GPU libre a Ollama/Qwen
+        self.device = "cpu" 
+        
+        # Configuración de rutas
         self.bpe_path = self.config.get("bpe_path", "./assets/bpe_simple_vocab_16e6.txt.gz")
         self.text_prompt = self.config.get("text_prompt", "car")
-        
-        # Gestión de IDs internos de SAM
         self.global_counter = 1
 
         print(f"🔧 [SAM3] Inicializando modelo en {self.device}...")
         
-        # 1. Cargar Modelo
-        # Fallback de ruta si no se encuentra assets relativo
+        # 1. Lógica Robusta de Carga de Assets (BPE)
         if not os.path.exists(self.bpe_path):
-            sam3_root = os.path.dirname(os.path.dirname(sam3.__file__))
-            self.bpe_path = os.path.join(sam3_root, "assets", "bpe_simple_vocab_16e6.txt.gz")
+            print(f"   ⚠️ No se encontró BPE en ruta configurada: {self.bpe_path}")
+            found_fallback = False
             
-        self.model = build_sam3_image_model(bpe_path=self.bpe_path)
-        self.model.to(self.device)
-        self.model.eval()
+            # Intento 1: Buscar relativo a la librería instalada (si es posible)
+            try:
+                if hasattr(sam3, '__file__') and sam3.__file__:
+                    sam3_root = os.path.dirname(os.path.dirname(sam3.__file__))
+                    possible_path = os.path.join(sam3_root, "assets", "bpe_simple_vocab_16e6.txt.gz")
+                    if os.path.exists(possible_path):
+                        self.bpe_path = possible_path
+                        found_fallback = True
+                        print(f"   ✅ BPE encontrado en librería: {self.bpe_path}")
+            except Exception:
+                pass
 
-        # 2. Configurar Transformaciones (Exactas a tu script)
+            # Intento 2: Buscar en carpeta local ./assets
+            if not found_fallback:
+                local_assets = os.path.join(os.getcwd(), "assets", "bpe_simple_vocab_16e6.txt.gz")
+                if os.path.exists(local_assets):
+                    self.bpe_path = local_assets
+                    print(f"   ✅ BPE encontrado localmente: {self.bpe_path}")
+            
+        try:
+            self.model = build_sam3_image_model(bpe_path=self.bpe_path)
+            self.model.to(self.device)
+            self.model.eval()
+        except Exception as e:
+            raise RuntimeError(f"❌ Error fatal cargando pesos SAM3. Verifica que el archivo '{self.bpe_path}' existe. Error: {e}")
+
+        # 2. Configurar Transformaciones
         self.transform = ComposeAPI(
             transforms=[
                 RandomResizeAPI(sizes=1008, max_size=1008, square=True, consistent_transform=False),
@@ -73,16 +100,10 @@ class SAM3Segmenter:
         print("✅ [SAM3] Modelo cargado y listo.")
 
     def _create_datapoint(self, pil_image) -> Datapoint:
-        """Helper interno para crear la estructura de datos que exige SAM3"""
         w, h = pil_image.size
-        
-        # Crear Datapoint vacío
         dp = Datapoint(find_queries=[], images=[])
-        
-        # Set Image
         dp.images = [SAMImage(data=pil_image, objects=[], size=[h, w])]
         
-        # Add Text Prompt ("car")
         self.global_counter += 1
         query = FindQueryLoaded(
             query_text=self.text_prompt,
@@ -100,45 +121,36 @@ class SAM3Segmenter:
             )
         )
         dp.find_queries.append(query)
-        
         return dp
 
     def process_image(self, image_path: str) -> Tuple[Optional[Image.Image], Optional[List[int]]]:
-        """
-        Procesa una imagen y devuelve:
-        1. PIL Image con el coche segmentado (fondo negro).
-        2. Bounding Box [x, y, w, h] del contorno del coche.
-        """
         if not os.path.exists(image_path):
             print(f"❌ [SAM3] Imagen no encontrada: {image_path}")
             return None, None
 
         try:
-            # Cargar imagen
             pil_image = Image.open(image_path).convert("RGB")
             img_np = np.array(pil_image)
             
-            # Preparar inputs
             dp = self._create_datapoint(pil_image)
             dp = self.transform(dp)
             
-            # Collate (Simular batch de 1)
             batch = collate([dp], dict_key="dummy")["dummy"]
             batch = copy_data_to_device(batch, torch.device(self.device), non_blocking=True)
 
-            # Inferencia (Usando bfloat16 como en tu script)
-            with torch.inference_mode(), torch.autocast(self.device, dtype=torch.bfloat16):
+            # Inferencia (Float32 para CPU, Bfloat16 si fuera CUDA)
+            dtype = torch.bfloat16 if self.device == 'cuda' else torch.float32
+            
+            with torch.inference_mode(), torch.autocast(self.device, dtype=dtype):
                 output = self.model(batch)
                 results = self.postprocessor.process_results(output, batch.find_metadatas)
 
-            # Extraer resultado (primero del batch)
             if not results: return None, None
             result = list(results.values())[0]
-            
             masks = result.get('masks')
+            
             if masks is None: return None, None
 
-            # Convertir máscaras a Numpy
             if isinstance(masks, torch.Tensor):
                 masks_np = masks.float().cpu().numpy()
             elif isinstance(masks, list):
@@ -146,7 +158,6 @@ class SAM3Segmenter:
             else:
                 masks_np = masks
 
-            # Reshape logic (Vital para consistencia)
             if masks_np.ndim > 2:
                 h_m, w_m = masks_np.shape[-2:]
                 masks_np = masks_np.reshape(-1, h_m, w_m)
@@ -154,47 +165,34 @@ class SAM3Segmenter:
                 masks_np = masks_np[None, :, :]
 
             if masks_np.shape[0] == 0:
-                print(f"⚠️ [SAM3] No se detectaron máscaras para {os.path.basename(image_path)}")
                 return None, None
 
-            # --- LÓGICA DE SELECCIÓN (Tu script original) ---
-            # Quedarnos con la máscara más grande
             areas = masks_np.sum(axis=(1, 2))
             largest_idx = int(np.argmax(areas))
-            
             largest_mask = masks_np[largest_idx]
             largest_mask = (largest_mask > 0).astype(np.uint8)
 
-            # Resize de seguridad (por si SAM devuelve mask en otra resolución)
             if largest_mask.shape != img_np.shape[:2]:
                 temp_mask_pil = Image.fromarray(largest_mask * 255).resize(
                     (img_np.shape[1], img_np.shape[0]), resample=Image.NEAREST
                 )
                 largest_mask = np.array(temp_mask_pil) // 255
 
-            # Calcular Contorno y BBox
             contours, _ = cv2.findContours(largest_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
-            bbox = [0, 0, img_np.shape[1], img_np.shape[0]] # Default full image
+            bbox = [0, 0, img_np.shape[1], img_np.shape[0]]
             
             if len(contours) > 0:
                 largest_contour = max(contours, key=cv2.contourArea)
-                # BBox: x, y, w, h
                 bbox = list(cv2.boundingRect(largest_contour))
             else:
-                # Si hay máscara pero no contorno claro, retornamos None por seguridad
                 return None, None
 
-            # Aplicar máscara negra al fondo
             mask_3d = np.stack([largest_mask] * 3, axis=-1)
             final_img_np = img_np * mask_3d
             
-            # Retornar imagen limpia y bbox
-            final_image = Image.fromarray(final_img_np.astype(np.uint8))
-            return final_image, bbox
+            return Image.fromarray(final_img_np.astype(np.uint8)), bbox
 
         except Exception as e:
             print(f"❌ [SAM3] Error procesando {os.path.basename(image_path)}: {e}")
-            import traceback
-            traceback.print_exc()
             return None, None

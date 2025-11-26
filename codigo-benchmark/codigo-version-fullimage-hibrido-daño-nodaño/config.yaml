@@ -28,10 +28,10 @@ gemini_config:
   api_key: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 # Modelo VLM a evaluar
-modelo_a_evaluar: qwen3-vl:8b-instruct-q8_0
+modelo_a_evaluar: qwen3-vl:4b
 
 modelos_a_evaluar_en_lote:
-  - qwen3-vl:8b-instruct-q8_0
+  - qwen3-vl:4b
 
 # Hiperparámetros de generación VLM
 hiperparametros:

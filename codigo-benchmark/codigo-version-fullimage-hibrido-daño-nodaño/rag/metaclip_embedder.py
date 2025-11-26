@@ -18,7 +18,7 @@ class MetaCLIPEmbedder:
     FALLBACK_MODEL = "laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K"
 
     def __init__(self, device: Optional[str] = None, verbose: bool = False):
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = "cpu" # device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.verbose = verbose
         
         if self.verbose:
