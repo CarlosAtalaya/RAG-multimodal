@@ -1,9 +1,14 @@
-
+# ==========================================
+# CONFIGURACIÓN GENERAL
+# ==========================================
 directorio_imagenes: dataset_split_1
 
-# Gestores de modelos
+# Gestor de modelos (backend)
 gestor: ollama
 
+# ==========================================
+# CONFIGURACIÓN DE MODELOS (BACKENDS)
+# ==========================================
 ollama_config:
   endpoint: http://localhost:11434/api/generate
 
@@ -22,50 +27,60 @@ openai_config:
 gemini_config:
   api_key: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-# Modelo a evaluar
+# Modelo VLM a evaluar
 modelo_a_evaluar: qwen3-vl:8b-instruct-q8_0
 
 modelos_a_evaluar_en_lote:
   - qwen3-vl:8b-instruct-q8_0
 
-# Hiperparámetros
+# Hiperparámetros de generación VLM
 hiperparametros:
   temperature: 0.0
   top_k: 30
 
-# Archivos
+# ==========================================
+# ARCHIVOS DE SALIDA Y TAREAS
+# ==========================================
 prompts_file: prompts.json
 output_file: resultados_evaluacion.json
 
-# Tareas
 tareas_a_ejecutar:
   - Hallucination
+  # - hF1
+  # - PDS
 
-# ✨ RAG CONFIGURATION (SIMPLIFICADO)
+# ==========================================
+# ✨ CONFIGURACIÓN SAM3 (NUEVO)
+# ==========================================
+# Necesario para el módulo de segmentación previo al RAG
+sam3_config:
+  # Ruta al vocabulario (ajusta si tu carpeta assets está en otro lado)
+  bpe_path: "./assets/bpe_simple_vocab_16e6.txt.gz"
+  text_prompt: "car"
+
+# ==========================================
+# ✨ CONFIGURACIÓN RAG MULTIMODAL (GRID)
+# ==========================================
 rag_config:
   enabled: true
   
-  # Normalización taxonómica
+  # Tipo de motor de embeddings
+  embedding_model_type: "metaclip"  # Usa el nuevo MetaCLIPEmbedder
+  
+  # Rutas al Índice Vectorial (Generado en Fase 4)
+  # Asegúrate de que coincidan con donde guardaste el índice unificado
+  index_path: "outputs/vector_indices/metaclip_unified_index"
+  index_filename: "index_metaclip_unified.faiss"
+  metadata_filename: "metadata_unified.pkl"
+  config_filename: "index_config.json"
+  
+  # Parámetros de Inferencia por Grid (Inference Pipeline)
+  top_k_per_crop: 3         # Cuántos vecinos buscar por cada crop del grid
+  similarity_threshold: 0.60 # Umbral mínimo de similitud para considerar un hallazgo válido
+  
+  # Normalización de taxonomía (para limpiar nombres de daños)
   enable_taxonomy_normalization: true
   
-  # Paths del índice
-  index_path: vector_indices/dinov3_hybrid_daño-nodaño_split2
-  index_filename: indexhnswflat_dano_nodano.index
-  metadata_filename: metadata_dano_nodano.pkl
-  config_filename: index_config_dano_nodano.json
-  
-  # Embedder híbrido (SIEMPRE)
+  # Configuración Legacy (Ignorada por MetaCLIP pero mantenida por compatibilidad)
   visual_weight: 0.5
   text_weight: 0.5
-  
-  # Retrieval
-  top_k: 5
-  max_examples_in_prompt: 3
-  
-  # Modelo que usará RAG
-  modelo_con_rag: qwen3-vl:8b-instruct-q8_0
-
-  # ✨ NUEVO: Gestión de ejemplos sin daño
-  allow_no_damage_examples: true  # Permitir ejemplos sin daño
-  min_damage_examples: 2          # Mínimo de ejemplos CON daño (si disponibles)
-  balance_damage_types: true      # Intentar balancear con/sin daño

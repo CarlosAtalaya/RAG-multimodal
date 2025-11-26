@@ -1,16 +1,11 @@
-# rag/__init__.py (ACTUALIZADO)
+# rag/__init__.py
 
-from .dinov3_embedder import DINOv3ViTLEmbedder
-from .multimodal_embedder import MultimodalEmbedder
+# Exponemos las clases principales al exterior
 from .retriever import DamageRAGRetriever, SearchResult
+from .multimodal_embedder import MultimodalEmbedder
 from .prompt_builder import RAGPromptBuilder
-from .taxonomy_normalizer import TaxonomyNormalizer
+from .inference_pipeline import MultimodalRAGPipeline
 
-__all__ = [
-    'DINOv3ViTLEmbedder',
-    'MultimodalEmbedder',
-    'DamageRAGRetriever',
-    'SearchResult',
-    'RAGPromptBuilder',
-    'TaxonomyNormalizer'
-]
+# Opcional: Si quieres acceder a componentes internos desde fuera
+from .sam3_wrapper import SAM3Segmenter
+from .taxonomy_normalizer import TaxonomyNormalizer
